@@ -1,7 +1,21 @@
+// Bell sound for countdown completion
+const bellSound = new Audio("https://orangefreesounds.com/wp-content/uploads/2024/02/Happy-bell-sound-effect.mp3");
+
+// DOM Elements
 const timerDisplay = document.getElementById("timer-display");
 const startButton = document.getElementById("start-button");
 const pauseButton = document.getElementById("pause-button");
 const finishButton = document.getElementById("finish-button");
+
+const countdownDisplay = document.getElementById("countdown-display");
+const countdownStartButton = document.getElementById("countdown-start-button");
+const countdownPauseButton = document.getElementById("countdown-pause-button");
+const countdownFinishButton = document.getElementById("countdown-finish-button");
+
+const timerMinutesInput = document.getElementById("timer-minutes");
+const timerSecondsInput = document.getElementById("timer-seconds");
+const timerPresetButtons = document.querySelectorAll("[data-timer-preset]");
+
 const sessionsTableBody = document.getElementById("sessions-table-body");
 const weeklyStat = document.getElementById("weekly-total");
 const monthlyStat = document.getElementById("monthly-total");
@@ -13,327 +27,334 @@ const weeklyProgressBar = document.getElementById("weekly-progress-bar");
 const weeklyProgressText = document.getElementById("weekly-progress-text");
 const weeklyGoalForm = document.getElementById("weekly-goal-form");
 const weeklyGoalInput = document.getElementById("weekly-goal-input");
-const weeklyGoalSaveButton = document.querySelector(".goal-save-button");
 
-const modes = {
-  STOPWATCH: "stopwatch",
-  TIMER: "timer",
-};
-
-const modeButtons = {
-  [modes.STOPWATCH]: document.getElementById("mode-stopwatch"),
-  [modes.TIMER]: document.getElementById("mode-timer"),
-};
-
-const timerConfig = document.getElementById("timer-config");
-const timerMinutesInput = document.getElementById("timer-minutes");
-const timerSecondsInput = document.getElementById("timer-seconds");
-const timerPresetButtons = document.querySelectorAll("[data-timer-preset]");
-
-const state = {
-  timerInterval: null,
-  sessionStartTimestamp: null,
+// Stopwatch State
+const stopwatchState = {
+  interval: null,
+  startTimestamp: null,
   initialStartTimestamp: null,
   elapsedBeforePause: 0,
   isRunning: false,
   hasSession: false,
-  mode: modes.STOPWATCH,
-  targetDurationMs: 0,
-  visibilityPromptActive: false,
-  autoCompleting: false,
 };
 
+// Countdown State
+const countdownState = {
+  interval: null,
+  startTimestamp: null,
+  initialStartTimestamp: null,
+  targetDurationMs: 0,
+  elapsedBeforePause: 0,
+  isRunning: false,
+  hasSession: false,
+};
+
+// Utility Functions
 function formatDuration(seconds) {
   const totalSeconds = Math.max(0, Math.floor(seconds));
-  const hrs = Math.floor(totalSeconds / 3600)
-    .toString()
-    .padStart(2, "0");
-  const mins = Math.floor((totalSeconds % 3600) / 60)
-    .toString()
-    .padStart(2, "0");
+  const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, "0");
+  const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, "0");
   const secs = (totalSeconds % 60).toString().padStart(2, "0");
   return `${hrs}:${mins}:${secs}`;
 }
 
-function normalizeTimerInputs() {
-  if (!timerMinutesInput || !timerSecondsInput) {
-    return;
-  }
-
-  let minutes = parseInt(timerMinutesInput.value, 10);
-  if (!Number.isFinite(minutes) || minutes < 0) {
-    minutes = 0;
-  }
-  if (minutes > 999) {
-    minutes = 999;
-  }
-
-  let seconds = parseInt(timerSecondsInput.value, 10);
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    seconds = 0;
-  }
-  if (seconds > 59) {
-    seconds = 59;
-  }
-
-  timerMinutesInput.value = String(minutes);
-  timerSecondsInput.value = String(seconds);
-  updateTimerDisplay();
+function formatCountdown(seconds) {
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
+  const secs = (totalSeconds % 60).toString().padStart(2, "0");
+  return `${mins}:${secs}`;
 }
 
-function getConfiguredTimerMs() {
-  if (!timerMinutesInput || !timerSecondsInput) {
-    return 0;
-  }
-  const minutes = Number(timerMinutesInput.value) || 0;
-  const seconds = Number(timerSecondsInput.value) || 0;
-  const totalSeconds = minutes * 60 + seconds;
-  return totalSeconds * 1000;
-}
-
-function updateModeButtons() {
-  Object.entries(modeButtons).forEach(([mode, button]) => {
-    if (!button) {
-      return;
-    }
-    if (mode === state.mode) {
-      button.classList.add("active");
-      button.setAttribute("aria-pressed", "true");
-    } else {
-      button.classList.remove("active");
-      button.setAttribute("aria-pressed", "false");
-    }
-  });
-}
-
-function updateTimerConfigVisibility() {
-  if (!timerConfig) {
-    return;
-  }
-  if (state.mode === modes.TIMER) {
-    timerConfig.classList.remove("hidden");
-    timerConfig.setAttribute("aria-hidden", "false");
-  } else {
-    timerConfig.classList.add("hidden");
-    timerConfig.setAttribute("aria-hidden", "true");
-  }
-}
-
-function updateTimerConfigAvailability() {
-  const disabled = state.hasSession;
-  if (timerMinutesInput) {
-    timerMinutesInput.disabled = disabled;
-  }
-  if (timerSecondsInput) {
-    timerSecondsInput.disabled = disabled;
-  }
-  if (timerConfig) {
-    timerConfig.classList.toggle("disabled", disabled);
-    timerConfig.setAttribute("aria-disabled", String(disabled));
-  }
-  timerPresetButtons.forEach((button) => {
-    button.disabled = disabled;
-    button.setAttribute("aria-disabled", String(disabled));
-  });
-}
-
-function setMode(mode, options = {}) {
-  const { skipConfirm = false } = options;
-  if (!Object.values(modes).includes(mode)) {
-    return;
-  }
-
-  if (mode === state.mode) {
-    updateModeButtons();
-    updateTimerConfigVisibility();
-    updateTimerConfigAvailability();
-    updateTimerDisplay();
-    return;
-  }
-
-  if (state.hasSession && !skipConfirm) {
-    const confirmed = window.confirm(
-      "Switching modes will reset your current session. Continue?"
-    );
-    if (!confirmed) {
-      return;
-    }
-    resetTimer();
-  } else if (state.hasSession) {
-    resetTimer();
-  }
-
-  state.mode = mode;
-  updateModeButtons();
-  updateTimerConfigVisibility();
-  if (state.mode === modes.TIMER) {
-    normalizeTimerInputs();
-  }
-  updateTimerConfigAvailability();
-  updateTimerDisplay();
-}
-
-function getElapsedMs() {
-  let elapsed = state.elapsedBeforePause;
-  if (state.isRunning && state.sessionStartTimestamp) {
-    elapsed += Date.now() - state.sessionStartTimestamp;
+// Stopwatch Functions
+function getStopwatchElapsed() {
+  let elapsed = stopwatchState.elapsedBeforePause;
+  if (stopwatchState.isRunning && stopwatchState.startTimestamp) {
+    elapsed += Date.now() - stopwatchState.startTimestamp;
   }
   return elapsed;
 }
 
-function updateTimerDisplay() {
-  let displaySeconds = 0;
-  const elapsedMs = getElapsedMs();
-
-  if (state.mode === modes.STOPWATCH) {
-    displaySeconds = elapsedMs / 1000;
-  } else {
-    const targetMs = state.hasSession ? state.targetDurationMs : getConfiguredTimerMs();
-    const remainingMs = Math.max(targetMs - elapsedMs, 0);
-    displaySeconds = remainingMs / 1000;
-
-    if (
-      state.isRunning &&
-      state.hasSession &&
-      targetMs > 0 &&
-      !state.autoCompleting &&
-      elapsedMs >= targetMs
-    ) {
-      handleTimerAutoCompletion();
-      return;
-    }
-  }
-
+function updateStopwatchDisplay() {
+  const elapsedMs = getStopwatchElapsed();
+  const displaySeconds = elapsedMs / 1000;
   timerDisplay.textContent = formatDuration(displaySeconds);
 }
 
-function updateButtonState() {
-  startButton.disabled = state.isRunning;
-  pauseButton.disabled = !state.isRunning;
-  finishButton.disabled = !state.hasSession;
-  updateTimerConfigAvailability();
+function startStopwatch() {
+  if (stopwatchState.isRunning) return;
+
+  const now = Date.now();
+  if (!stopwatchState.hasSession) {
+    stopwatchState.initialStartTimestamp = now;
+    stopwatchState.elapsedBeforePause = 0;
+    stopwatchState.hasSession = true;
+  }
+
+  stopwatchState.startTimestamp = now;
+  stopwatchState.isRunning = true;
+  stopwatchState.interval = setInterval(updateStopwatchDisplay, 250);
+  updateStopwatchDisplay();
+  updateStopwatchButtons();
 }
 
-function startTimer() {
-  if (state.isRunning) {
+function pauseStopwatch() {
+  if (!stopwatchState.isRunning) return;
+
+  if (stopwatchState.interval) {
+    clearInterval(stopwatchState.interval);
+    stopwatchState.interval = null;
+  }
+
+  stopwatchState.elapsedBeforePause += Date.now() - stopwatchState.startTimestamp;
+  stopwatchState.startTimestamp = null;
+  stopwatchState.isRunning = false;
+  updateStopwatchDisplay();
+  updateStopwatchButtons();
+}
+
+function resetStopwatch() {
+  if (stopwatchState.interval) {
+    clearInterval(stopwatchState.interval);
+    stopwatchState.interval = null;
+  }
+  stopwatchState.startTimestamp = null;
+  stopwatchState.initialStartTimestamp = null;
+  stopwatchState.elapsedBeforePause = 0;
+  stopwatchState.isRunning = false;
+  stopwatchState.hasSession = false;
+  updateStopwatchDisplay();
+  updateStopwatchButtons();
+}
+
+async function finishStopwatch() {
+  if (!stopwatchState.hasSession) return;
+
+  const totalElapsed = getStopwatchElapsed();
+  if (totalElapsed <= 0) return;
+
+  const durationSeconds = totalElapsed / 1000;
+  const endTime = new Date();
+  const startTime = stopwatchState.initialStartTimestamp
+    ? new Date(stopwatchState.initialStartTimestamp)
+    : new Date(endTime.getTime() - totalElapsed);
+
+  const payload = {
+    start_time: startTime.toISOString(),
+    end_time: endTime.toISOString(),
+    duration_seconds: durationSeconds,
+  };
+
+  try {
+    const response = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || "Failed to save session");
+    }
+
+    await Promise.all([loadSessions(), loadStats()]);
+  } catch (error) {
+    alert(error.message || "Something went wrong.");
+  } finally {
+    resetStopwatch();
+  }
+}
+
+function updateStopwatchButtons() {
+  startButton.disabled = stopwatchState.isRunning;
+  pauseButton.disabled = !stopwatchState.isRunning;
+  finishButton.disabled = !stopwatchState.hasSession;
+}
+
+// Countdown Functions
+function getConfiguredTimerMs() {
+  const minutes = Number(timerMinutesInput.value) || 0;
+  const seconds = Number(timerSecondsInput.value) || 0;
+  return (minutes * 60 + seconds) * 1000;
+}
+
+function getCountdownElapsed() {
+  let elapsed = countdownState.elapsedBeforePause;
+  if (countdownState.isRunning && countdownState.startTimestamp) {
+    elapsed += Date.now() - countdownState.startTimestamp;
+  }
+  return elapsed;
+}
+
+function updateCountdownDisplay() {
+  const elapsedMs = getCountdownElapsed();
+  const targetMs = countdownState.hasSession ? countdownState.targetDurationMs : getConfiguredTimerMs();
+  const remainingMs = Math.max(targetMs - elapsedMs, 0);
+  const displaySeconds = remainingMs / 1000;
+
+  countdownDisplay.textContent = formatCountdown(displaySeconds);
+
+  // Auto-complete when countdown reaches zero
+  if (countdownState.isRunning && countdownState.hasSession && remainingMs <= 0) {
+    // Play bell sound
+    bellSound.play().catch(err => console.log("Could not play sound:", err));
+    finishCountdown(true);
+  }
+}
+
+function startCountdown() {
+  console.log("startCountdown called");
+  console.log("countdownState:", countdownState);
+
+  if (countdownState.isRunning) {
+    console.log("Already running, returning");
     return;
   }
 
   const now = Date.now();
+  if (!countdownState.hasSession) {
+    const targetMs = getConfiguredTimerMs();
+    console.log("Target duration (ms):", targetMs);
 
-  if (!state.hasSession) {
-    if (state.mode === modes.TIMER) {
-      const targetMs = getConfiguredTimerMs();
-      if (targetMs <= 0) {
-        alert("Please set a timer duration greater than zero.");
-        return;
-      }
-      state.targetDurationMs = targetMs;
-    } else {
-      state.targetDurationMs = 0;
+    if (targetMs <= 0) {
+      alert("Please set a timer duration greater than zero.");
+      return;
+    }
+    countdownState.targetDurationMs = targetMs;
+    countdownState.initialStartTimestamp = now;
+    countdownState.elapsedBeforePause = 0;
+    countdownState.hasSession = true;
+  }
+
+  countdownState.startTimestamp = now;
+  countdownState.isRunning = true;
+  countdownState.interval = setInterval(updateCountdownDisplay, 250);
+  updateCountdownDisplay();
+  updateCountdownButtons();
+  console.log("Countdown started");
+}
+
+function pauseCountdown() {
+  if (!countdownState.isRunning) return;
+
+  if (countdownState.interval) {
+    clearInterval(countdownState.interval);
+    countdownState.interval = null;
+  }
+
+  countdownState.elapsedBeforePause += Date.now() - countdownState.startTimestamp;
+  countdownState.startTimestamp = null;
+  countdownState.isRunning = false;
+  updateCountdownDisplay();
+  updateCountdownButtons();
+}
+
+function resetCountdown() {
+  if (countdownState.interval) {
+    clearInterval(countdownState.interval);
+    countdownState.interval = null;
+  }
+  countdownState.startTimestamp = null;
+  countdownState.initialStartTimestamp = null;
+  countdownState.targetDurationMs = 0;
+  countdownState.elapsedBeforePause = 0;
+  countdownState.isRunning = false;
+  countdownState.hasSession = false;
+  updateCountdownDisplay();
+  updateCountdownButtons();
+}
+
+async function finishCountdown(autoComplete = false) {
+  if (!countdownState.hasSession) return;
+
+  const totalElapsed = getCountdownElapsed();
+  if (totalElapsed <= 0) return;
+
+  let durationSeconds = totalElapsed / 1000;
+
+  // If auto-completing, use the target duration
+  if (autoComplete && countdownState.targetDurationMs > 0) {
+    durationSeconds = countdownState.targetDurationMs / 1000;
+  }
+
+  const endTime = new Date();
+  const startTime = countdownState.initialStartTimestamp
+    ? new Date(countdownState.initialStartTimestamp)
+    : new Date(endTime.getTime() - (durationSeconds * 1000));
+
+  const payload = {
+    start_time: startTime.toISOString(),
+    end_time: endTime.toISOString(),
+    duration_seconds: durationSeconds,
+  };
+
+  try {
+    const response = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || "Failed to save session");
     }
 
-    state.initialStartTimestamp = now;
-    state.elapsedBeforePause = 0;
-    state.hasSession = true;
+    await Promise.all([loadSessions(), loadStats()]);
+  } catch (error) {
+    alert(error.message || "Something went wrong.");
+  } finally {
+    resetCountdown();
   }
-
-  state.sessionStartTimestamp = now;
-  state.isRunning = true;
-  state.timerInterval = setInterval(updateTimerDisplay, 250);
-  updateTimerDisplay();
-  updateButtonState();
 }
 
-function pauseTimer() {
-  if (!state.isRunning) {
-    return;
-  }
+function updateCountdownButtons() {
+  countdownStartButton.disabled = countdownState.isRunning;
+  countdownPauseButton.disabled = !countdownState.isRunning;
+  countdownFinishButton.disabled = !countdownState.hasSession;
 
-  if (state.timerInterval) {
-    clearInterval(state.timerInterval);
-    state.timerInterval = null;
-  }
-
-  state.elapsedBeforePause += Date.now() - state.sessionStartTimestamp;
-  state.sessionStartTimestamp = null;
-  state.isRunning = false;
-  updateTimerDisplay();
-  updateButtonState();
-}
-
-function resetTimer() {
-  if (state.timerInterval) {
-    clearInterval(state.timerInterval);
-    state.timerInterval = null;
-  }
-  state.timerInterval = null;
-  state.sessionStartTimestamp = null;
-  state.initialStartTimestamp = null;
-  state.elapsedBeforePause = 0;
-  state.isRunning = false;
-  state.hasSession = false;
-  state.targetDurationMs = 0;
-  state.visibilityPromptActive = false;
-  state.autoCompleting = false;
-  updateTimerDisplay();
-  updateButtonState();
+  // Disable timer config when session is active
+  if (timerMinutesInput) timerMinutesInput.disabled = countdownState.hasSession;
+  if (timerSecondsInput) timerSecondsInput.disabled = countdownState.hasSession;
+  timerPresetButtons.forEach(btn => btn.disabled = countdownState.hasSession);
 }
 
 function applyTimerPreset(totalSeconds) {
-  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+  console.log("applyTimerPreset called with:", totalSeconds);
+
+  if (countdownState.hasSession) {
+    console.log("Session active, cannot change preset");
     return;
   }
 
-  let minutes = Math.floor(totalSeconds / 60);
-  let seconds = Math.floor(totalSeconds % 60);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
 
-  if (minutes > 999) {
-    minutes = 999;
-    seconds = 59;
-  }
-
-  if (timerMinutesInput) {
-    timerMinutesInput.value = String(minutes);
-  }
-  if (timerSecondsInput) {
-    timerSecondsInput.value = String(seconds);
-  }
-
-  state.targetDurationMs = 0;
-  normalizeTimerInputs();
+  console.log("Setting minutes to:", minutes, "seconds to:", seconds);
+  timerMinutesInput.value = String(minutes);
+  timerSecondsInput.value = String(seconds);
+  updateCountdownDisplay();
+  console.log("Preset applied");
 }
 
-function setGoalSaving(saving) {
-  if (weeklyGoalInput) {
-    weeklyGoalInput.disabled = saving;
-  }
-  if (weeklyGoalSaveButton) {
-    weeklyGoalSaveButton.disabled = saving;
-  }
+// Data Functions
+async function loadSessions() {
+  const response = await fetch("/api/sessions");
+  if (!response.ok) throw new Error("Unable to load sessions");
+  const sessions = await response.json();
+  renderSessions(sessions);
 }
 
-function renderWeeklyGoal(stats) {
-  if (!weeklyTargetDisplay || !weeklyProgressBar || !weeklyProgressText) {
-    return;
-  }
+async function loadStats() {
+  const response = await fetch("/api/stats");
+  if (!response.ok) throw new Error("Unable to load stats");
+  const stats = await response.json();
 
-  const targetSeconds = Number(stats.weekly_target_seconds) || 0;
-  weeklyTargetDisplay.textContent = formatDuration(targetSeconds);
-
-  if (weeklyGoalInput && !weeklyGoalInput.matches(":focus")) {
-    weeklyGoalInput.value = targetSeconds > 0 ? Math.round(targetSeconds / 60) : "";
-  }
-
-  if (targetSeconds > 0) {
-    const percent = Number(stats.weekly_progress_percentage) || 0;
-    const clampedPercent = Math.max(0, Math.min(percent, 100));
-    weeklyProgressBar.style.width = `${clampedPercent}%`;
-    weeklyProgressText.textContent = `${Math.round(percent)}%`;
-  } else {
-    weeklyProgressBar.style.width = "0%";
-    weeklyProgressText.textContent = "Set a target";
-  }
+  weeklyStat.textContent = formatDuration(stats.weekly_seconds);
+  monthlyStat.textContent = formatDuration(stats.monthly_seconds);
+  yearlyStat.textContent = formatDuration(stats.yearly_seconds);
+  totalStat.textContent = formatDuration(stats.total_seconds);
+  totalSessionsStat.textContent = stats.total_sessions;
+  renderWeeklyGoal(stats);
 }
 
 function renderSessions(sessions) {
@@ -367,27 +388,23 @@ function renderSessions(sessions) {
   });
 }
 
-async function loadSessions() {
-  const response = await fetch("/api/sessions");
-  if (!response.ok) {
-    throw new Error("Unable to load sessions");
-  }
-  const sessions = await response.json();
-  renderSessions(sessions);
-}
+function renderWeeklyGoal(stats) {
+  const targetSeconds = Number(stats.weekly_target_seconds) || 0;
+  weeklyTargetDisplay.textContent = formatDuration(targetSeconds);
 
-async function loadStats() {
-  const response = await fetch("/api/stats");
-  if (!response.ok) {
-    throw new Error("Unable to load stats");
+  if (weeklyGoalInput && !weeklyGoalInput.matches(":focus")) {
+    weeklyGoalInput.value = targetSeconds > 0 ? Math.round(targetSeconds / 60) : "";
   }
-  const stats = await response.json();
-  weeklyStat.textContent = formatDuration(stats.weekly_seconds);
-  monthlyStat.textContent = formatDuration(stats.monthly_seconds);
-  yearlyStat.textContent = formatDuration(stats.yearly_seconds);
-  totalStat.textContent = formatDuration(stats.total_seconds);
-  totalSessionsStat.textContent = stats.total_sessions;
-  renderWeeklyGoal(stats);
+
+  if (targetSeconds > 0) {
+    const percent = Number(stats.weekly_progress_percentage) || 0;
+    const clampedPercent = Math.max(0, Math.min(percent, 100));
+    weeklyProgressBar.style.width = `${clampedPercent}%`;
+    weeklyProgressText.textContent = `${Math.round(percent)}%`;
+  } else {
+    weeklyProgressBar.style.width = "0%";
+    weeklyProgressText.textContent = "Set a target";
+  }
 }
 
 async function deleteSession(sessionId) {
@@ -401,153 +418,89 @@ async function deleteSession(sessionId) {
   await Promise.all([loadSessions(), loadStats()]);
 }
 
-async function finishTimer(options = {}) {
-  const { autoComplete = false } = options;
+// Event Listeners
+document.addEventListener("DOMContentLoaded", async () => {
+  console.log("DOM loaded");
+  console.log("Countdown start button:", countdownStartButton);
+  console.log("Timer minutes input:", timerMinutesInput);
+  console.log("Timer seconds input:", timerSecondsInput);
+  console.log("Preset buttons:", timerPresetButtons);
 
-  if (!state.hasSession) {
-    return;
-  }
+  // Initialize displays
+  updateStopwatchDisplay();
+  updateCountdownDisplay();
+  updateStopwatchButtons();
+  updateCountdownButtons();
 
-  let totalElapsed = getElapsedMs();
-
-  if (totalElapsed <= 0) {
-    return;
-  }
-
-  let durationSeconds = totalElapsed / 1000;
-
-  if (state.mode === modes.TIMER) {
-    const targetSeconds = state.targetDurationMs > 0 ? state.targetDurationMs / 1000 : 0;
-    if (autoComplete && targetSeconds > 0) {
-      durationSeconds = targetSeconds;
-      totalElapsed = state.targetDurationMs;
-    }
-  }
-
-  const endTime = new Date();
-  const startTime = state.initialStartTimestamp
-    ? new Date(state.initialStartTimestamp)
-    : new Date(endTime.getTime() - totalElapsed);
-
-  const payload = {
-    start_time: startTime.toISOString(),
-    end_time: endTime.toISOString(),
-    duration_seconds: durationSeconds,
-  };
-
-  try {
-    const response = await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || "Failed to save session");
-    }
-
-    await Promise.all([loadSessions(), loadStats()]);
-  } catch (error) {
-    alert(error.message || "Something went wrong.");
-  } finally {
-    resetTimer();
-  }
-}
-
-function handleTimerAutoCompletion() {
-  if (state.autoCompleting) {
-    return;
-  }
-  state.autoCompleting = true;
-  if (state.timerInterval) {
-    clearInterval(state.timerInterval);
-    state.timerInterval = null;
-  }
-  finishTimer({ autoComplete: true });
-}
-
-async function init() {
-  if (timerMinutesInput && !timerMinutesInput.value) {
-    timerMinutesInput.value = "5";
-  }
-  if (timerSecondsInput && !timerSecondsInput.value) {
-    timerSecondsInput.value = "0";
-  }
-
-  normalizeTimerInputs();
-  setMode(state.mode, { skipConfirm: true });
-  resetTimer();
-
+  // Load data
   try {
     await Promise.all([loadSessions(), loadStats()]);
   } catch (error) {
     console.error(error);
   }
+
+  console.log("Initialization complete");
+});
+
+// Stopwatch buttons
+startButton.addEventListener("click", startStopwatch);
+pauseButton.addEventListener("click", pauseStopwatch);
+finishButton.addEventListener("click", () => finishStopwatch());
+
+// Countdown buttons
+if (countdownStartButton) {
+  console.log("Countdown start button found, adding listener");
+  countdownStartButton.addEventListener("click", () => {
+    console.log("Countdown start button clicked!");
+    startCountdown();
+  });
+} else {
+  console.error("Countdown start button NOT found!");
 }
 
-document.addEventListener("DOMContentLoaded", init);
+if (countdownPauseButton) {
+  countdownPauseButton.addEventListener("click", pauseCountdown);
+} else {
+  console.error("Countdown pause button NOT found!");
+}
 
-startButton?.addEventListener("click", () => {
-  startTimer();
-});
+if (countdownFinishButton) {
+  countdownFinishButton.addEventListener("click", () => finishCountdown(false));
+} else {
+  console.error("Countdown finish button NOT found!");
+}
 
-pauseButton?.addEventListener("click", () => {
-  pauseTimer();
-});
+// Timer input changes
+timerMinutesInput.addEventListener("input", updateCountdownDisplay);
+timerSecondsInput.addEventListener("input", updateCountdownDisplay);
 
-finishButton?.addEventListener("click", () => {
-  finishTimer();
-});
-
-modeButtons[modes.STOPWATCH]?.addEventListener("click", () => {
-  setMode(modes.STOPWATCH);
-});
-
-modeButtons[modes.TIMER]?.addEventListener("click", () => {
-  setMode(modes.TIMER);
-});
-
-timerMinutesInput?.addEventListener("input", normalizeTimerInputs);
-timerSecondsInput?.addEventListener("input", normalizeTimerInputs);
-
-timerPresetButtons.forEach((button) => {
+// Preset buttons
+console.log("Found", timerPresetButtons.length, "preset buttons");
+timerPresetButtons.forEach((button, index) => {
+  console.log(`Preset button ${index}:`, button.dataset.timerPreset);
   button.addEventListener("click", () => {
-    if (state.hasSession) {
-      return;
-    }
-
+    console.log("Preset button clicked!");
     const presetSeconds = Number(button.dataset.timerPreset);
-    if (!Number.isFinite(presetSeconds) || presetSeconds <= 0) {
-      return;
+    console.log("Preset seconds:", presetSeconds);
+    if (presetSeconds > 0) {
+      applyTimerPreset(presetSeconds);
     }
-
-    if (state.mode !== modes.TIMER) {
-      setMode(modes.TIMER, { skipConfirm: true });
-    }
-
-    applyTimerPreset(presetSeconds);
   });
 });
 
-weeklyGoalForm?.addEventListener("submit", async (event) => {
+// Weekly goal form
+weeklyGoalForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!weeklyGoalInput) {
-    return;
-  }
-
   const minutesValue = Number(weeklyGoalInput.value);
   if (!Number.isFinite(minutesValue) || minutesValue <= 0) {
     alert("Please enter a positive number of minutes.");
     return;
   }
 
-  const payload = {
-    target_seconds: minutesValue * 60,
-  };
+  const payload = { target_seconds: minutesValue * 60 };
 
   try {
-    setGoalSaving(true);
+    weeklyGoalInput.disabled = true;
     const response = await fetch("/api/weekly-target", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -563,33 +516,6 @@ weeklyGoalForm?.addEventListener("submit", async (event) => {
   } catch (error) {
     alert(error.message || "Something went wrong.");
   } finally {
-    setGoalSaving(false);
-  }
-});
-
-document.addEventListener("visibilitychange", async () => {
-  if (!document.hidden) {
-    state.visibilityPromptActive = false;
-    return;
-  }
-
-  if (!state.isRunning || state.visibilityPromptActive || state.autoCompleting) {
-    return;
-  }
-
-  state.visibilityPromptActive = true;
-  const confirmFinish = window.confirm(
-    "Your meditation timer is running. Finish the session before leaving this tab?"
-  );
-
-  if (confirmFinish) {
-    try {
-      await finishTimer();
-    } finally {
-      state.visibilityPromptActive = false;
-    }
-  } else {
-    pauseTimer();
-    state.visibilityPromptActive = false;
+    weeklyGoalInput.disabled = false;
   }
 });

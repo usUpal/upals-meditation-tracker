@@ -7,11 +7,11 @@ function verifyPassword() {
   const passwordError = document.getElementById("password-error");
   const passwordModal = document.getElementById("password-modal");
   const page = document.querySelector(".page");
-  
+
   if (!passwordInput) return;
-  
+
   const enteredPassword = passwordInput.value;
-  
+
   if (enteredPassword === CORRECT_PASSWORD) {
     isAuthenticated = true;
     passwordModal.classList.add("hidden");

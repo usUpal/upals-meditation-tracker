@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import List
 
 from bson import ObjectId
@@ -81,9 +82,11 @@ class WeeklyGoalUpdate(BaseModel):
         return value
 
 
+BASE_DIR = Path(__file__).resolve().parent
+
 app = FastAPI(title="Upal's Meditation Tracker")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 def ensure_weekly_goal_default() -> None:

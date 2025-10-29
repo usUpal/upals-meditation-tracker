@@ -3,6 +3,8 @@ const { useCallback, useEffect, useMemo, useRef, useState } = React;
 const CORRECT_PASSWORD = "upalupal";
 const BELL_SOUND_URL =
   "https://orangefreesounds.com/wp-content/uploads/2024/02/Happy-bell-sound-effect.mp3";
+const AUTH_COOKIE_NAME = "mt_auth";
+const AUTH_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const QUOTES = [
   "Meditation is not evasion; it is a serene encounter with reality. — Thich Nhat Hanh",
   "The thing about meditation is: you become more and more you. — David Lynch",
@@ -90,6 +92,24 @@ function getRandomQuote() {
   return QUOTES[Math.floor(Math.random() * QUOTES.length)];
 }
 
+function readCookie(name) {
+  return document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`))
+    ?.split("=")[1];
+}
+
+function setCookie(name, value, { expires } = {}) {
+  const expiresStr =
+    expires instanceof Date ? `; expires=${expires.toUTCString()}` : "";
+  document.cookie = `${name}=${value}; path=/; SameSite=Lax${expiresStr}`;
+}
+
+function clearCookie(name) {
+  document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+}
+
 async function requestJson(url, options) {
   const response = await fetch(url, options);
   if (!response.ok) {
@@ -112,7 +132,7 @@ async function requestJson(url, options) {
 
 function GradientButton({ className = "", children, ...rest }) {
   const base =
-    "rounded-full px-5 py-2.5 font-semibold shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+    "rounded-full px-5 py-2.5 font-semibold shadow-sm transition bg-gradient-to-r from-brand-rose to-brand-roseLight text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-rose disabled:cursor-not-allowed disabled:opacity-50";
   return (
     <button className={`${base} ${className}`} {...rest}>
       {children}
@@ -164,7 +184,7 @@ function PasswordModal({
           </div>
           <GradientButton
             type="submit"
-            className="w-full bg-gradient-to-r from-brand-emerald to-brand-emeraldLight text-slate-900 focus-visible:outline-brand-emerald"
+            className="w-full from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
           >
             Unlock
           </GradientButton>
@@ -199,13 +219,13 @@ function CountdownCompleteModal({ open, quote, onClose }) {
           🧘 Session Complete!
         </h2>
         <p className="mt-4 text-base italic text-slate-600">{quote}</p>
-        <GradientButton
+        <button
           type="button"
-          className="mt-6 bg-gradient-to-r from-brand-emerald to-brand-emeraldLight text-slate-900 focus-visible:outline-brand-emerald"
+          className="mt-6 rounded-full bg-[#CA6B52] px-5 py-2.5 font-semibold text-white shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#CA6B52] disabled:cursor-not-allowed disabled:opacity-50"
           onClick={onClose}
         >
           Close
-        </GradientButton>
+        </button>
       </div>
     </div>
   );
@@ -216,6 +236,8 @@ function MeditationApp() {
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const passwordInputRef = useRef(null);
+  const [authExpiry, setAuthExpiry] = useState(null);
+  const authTimeoutRef = useRef(null);
 
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [dataError, setDataError] = useState("");
@@ -279,6 +301,15 @@ function MeditationApp() {
       }
     };
   }, [countdown.isRunning]);
+
+  useEffect(() => {
+    return () => {
+      if (authTimeoutRef.current) {
+        window.clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     bellRef.current = new Audio(BELL_SOUND_URL);
@@ -498,6 +529,7 @@ function MeditationApp() {
 
   const handleCountdownReset = useCallback(() => {
     resetCountdownState();
+    setTimerInputs({ minutes: "0", seconds: "0" });
   }, [resetCountdownState]);
 
   useEffect(() => {
@@ -557,6 +589,37 @@ function MeditationApp() {
     }
   }, [stats]);
 
+  const handleLogout = useCallback(() => {
+    if (authTimeoutRef.current) {
+      window.clearTimeout(authTimeoutRef.current);
+      authTimeoutRef.current = null;
+    }
+    clearCookie(AUTH_COOKIE_NAME);
+    setIsAuthenticated(false);
+    setAuthExpiry(null);
+    setPassword("");
+    setPasswordError("Session expired. Please log in again.");
+    passwordInputRef.current?.focus();
+  }, []);
+
+  const scheduleLogout = useCallback(
+    (expiryTimestamp) => {
+      if (authTimeoutRef.current) {
+        window.clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+      const remaining = expiryTimestamp - Date.now();
+      if (remaining <= 0) {
+        handleLogout();
+        return;
+      }
+      authTimeoutRef.current = window.setTimeout(() => {
+        handleLogout();
+      }, remaining);
+    },
+    [handleLogout]
+  );
+
   const handlePasswordSubmit = useCallback(
     (event) => {
       event.preventDefault();
@@ -564,6 +627,12 @@ function MeditationApp() {
         setIsAuthenticated(true);
         setPassword("");
         setPasswordError("");
+        const expiryTimestamp = Date.now() + AUTH_DURATION_MS;
+        setAuthExpiry(expiryTimestamp);
+        setCookie(AUTH_COOKIE_NAME, String(expiryTimestamp), {
+          expires: new Date(expiryTimestamp),
+        });
+        scheduleLogout(expiryTimestamp);
         return;
       }
       setPasswordError("❌ Wrong password. Try again.");
@@ -572,7 +641,7 @@ function MeditationApp() {
         passwordInputRef.current?.focus();
       });
     },
-    [password]
+    [password, scheduleLogout]
   );
 
   const handleTimerInputChange = useCallback((field, value) => {
@@ -581,6 +650,28 @@ function MeditationApp() {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    const cookieValue = readCookie(AUTH_COOKIE_NAME);
+    if (!cookieValue) {
+      return;
+    }
+    const parsed = Number(cookieValue);
+    if (!Number.isFinite(parsed) || parsed <= Date.now()) {
+      clearCookie(AUTH_COOKIE_NAME);
+      return;
+    }
+    setIsAuthenticated(true);
+    setAuthExpiry(parsed);
+    scheduleLogout(parsed);
+  }, [scheduleLogout]);
+
+  useEffect(() => {
+    if (!authExpiry) {
+      return;
+    }
+    scheduleLogout(authExpiry);
+  }, [authExpiry, scheduleLogout]);
 
   const applyTimerPreset = useCallback((seconds) => {
     const minutes = Math.floor(seconds / 60);
@@ -745,25 +836,25 @@ function MeditationApp() {
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <GradientButton
                 type="button"
-                className="bg-gradient-to-r from-brand-emerald to-brand-emeraldLight text-slate-900 focus-visible:outline-brand-emerald"
                 disabled={stopwatch.isRunning}
                 onClick={handleStopwatchStart}
+                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
               >
                 Start / Resume
               </GradientButton>
               <GradientButton
                 type="button"
-                className="bg-gradient-to-r from-brand-amber to-brand-amberLight text-slate-900 focus-visible:outline-brand-amber"
                 disabled={!stopwatch.isRunning}
                 onClick={handleStopwatchPause}
+                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
               >
                 Pause
               </GradientButton>
               <GradientButton
                 type="button"
-                className="bg-gradient-to-r from-brand-rose to-brand-roseLight text-slate-900 focus-visible:outline-brand-rose"
                 disabled={!stopwatch.hasSession}
                 onClick={handleStopwatchFinish}
+                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
               >
                 Finish
               </GradientButton>
@@ -849,25 +940,25 @@ function MeditationApp() {
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <GradientButton
                 type="button"
-                className="bg-gradient-to-r from-brand-emerald to-brand-emeraldLight text-slate-900 focus-visible:outline-brand-emerald"
                 disabled={countdown.isRunning}
                 onClick={handleCountdownStart}
+                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
               >
                 Start Countdown
               </GradientButton>
               <GradientButton
                 type="button"
-                className="bg-gradient-to-r from-brand-amber to-brand-amberLight text-slate-900 focus-visible:outline-brand-amber"
                 disabled={!countdown.isRunning}
                 onClick={handleCountdownPause}
+                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
               >
                 Pause
               </GradientButton>
               <GradientButton
                 type="button"
-                className="bg-gradient-to-r from-brand-rose to-brand-roseLight text-slate-900 focus-visible:outline-brand-rose"
                 disabled={!countdown.hasSession}
                 onClick={() => handleCountdownFinish(false)}
+                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
               >
                 Finish
               </GradientButton>
@@ -911,13 +1002,13 @@ function MeditationApp() {
                 </p>
               </div>
               <div>
-                <div className="flex items-center gap-3">
-                  <div className="h-3 w-full rounded-full bg-slate-200">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-brand-sky to-brand-skyDeep transition-all"
-                      style={{ width: weeklyProgressWidth }}
-                    />
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="h-3 w-full rounded-full bg-[#F3E1D9]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#E8A68F] via-[#D98469] to-[#CA6A51] transition-all"
+                    style={{ width: weeklyProgressWidth }}
+                  />
+                </div>
                   <span className="text-sm font-semibold text-slate-600">
                     {weeklyProgressLabel}
                   </span>
@@ -943,7 +1034,7 @@ function MeditationApp() {
                   />
                   <GradientButton
                     type="submit"
-                    className="bg-gradient-to-r from-brand-sky to-brand-skyDeep text-white focus-visible:outline-brand-skyDeep sm:w-auto"
+                    className="sm:w-auto from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
                     disabled={isSavingWeeklyGoal}
                   >
                     {isSavingWeeklyGoal ? "Saving…" : "Save"}

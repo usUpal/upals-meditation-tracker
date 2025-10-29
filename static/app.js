@@ -1,5 +1,61 @@
+// Password Protection
+const CORRECT_PASSWORD = "upalupal";
+let isAuthenticated = false;
+
+function verifyPassword() {
+  const passwordInput = document.getElementById("password-input");
+  const passwordError = document.getElementById("password-error");
+  const passwordModal = document.getElementById("password-modal");
+  const page = document.querySelector(".page");
+  
+  if (!passwordInput) return;
+  
+  const enteredPassword = passwordInput.value;
+  
+  if (enteredPassword === CORRECT_PASSWORD) {
+    isAuthenticated = true;
+    passwordModal.classList.add("hidden");
+    if (page) page.classList.add("unlocked");
+    passwordError.classList.remove("show");
+    passwordInput.value = "";
+  } else {
+    passwordError.textContent = "❌ Wrong password. Try again.";
+    passwordError.classList.add("show");
+    passwordInput.value = "";
+    passwordInput.focus();
+  }
+}
+
+// Allow Enter key to submit password
+document.addEventListener("DOMContentLoaded", () => {
+  const passwordInput = document.getElementById("password-input");
+  if (passwordInput) {
+    passwordInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        verifyPassword();
+      }
+    });
+    // Focus on password input when page loads
+    passwordInput.focus();
+  }
+});
+
 // Bell sound for countdown completion
 const bellSound = new Audio("https://orangefreesounds.com/wp-content/uploads/2024/02/Happy-bell-sound-effect.mp3");
+
+// Meditation quotes
+const quotes = [
+  "Meditation is not evasion; it is a serene encounter with reality. — Thich Nhat Hanh",
+  "The thing about meditation is: you become more and more you. — David Lynch",
+  "Quiet the mind, and the soul will speak. — Ma Jaya Sati Bhagavati",
+  "Meditation is the discovery that the point of life is always arrived at in the immediate moment. — Alan Watts",
+  "Inhale the future, exhale the past. — Unknown",
+  "The goal of meditation isn't to control your thoughts, it's to stop letting them control you. — Unknown",
+  "Within you there is a stillness and a sanctuary to which you can retreat at any time. — Hermann Hesse",
+  "Meditation is the tongue of the soul and the language of our spirit. — Jeremy Taylor",
+  "The quieter you become, the more you can hear. — Ram Dass",
+  "You should sit in meditation for twenty minutes every day—unless you're too busy; then you should sit for an hour. — Zen Proverb"
+];
 
 // DOM Elements
 const timerDisplay = document.getElementById("timer-display");
@@ -47,6 +103,7 @@ const countdownState = {
   elapsedBeforePause: 0,
   isRunning: false,
   hasSession: false,
+  isCompleting: false,
 };
 
 // Utility Functions
@@ -193,27 +250,30 @@ function updateCountdownDisplay() {
 
   countdownDisplay.textContent = formatCountdown(displaySeconds);
 
-  // Auto-complete when countdown reaches zero
-  if (countdownState.isRunning && countdownState.hasSession && remainingMs <= 0) {
+  // Auto-complete when countdown reaches zero (only once)
+  if (countdownState.isRunning && countdownState.hasSession && remainingMs <= 0 && !countdownState.isCompleting) {
+    // Stop the interval immediately
+    if (countdownState.interval) {
+      clearInterval(countdownState.interval);
+      countdownState.interval = null;
+    }
+
     // Play bell sound
-    bellSound.play().catch(err => console.log("Could not play sound:", err));
+    bellSound.play().catch(err => { });
+
+    // Finish the countdown (don't set isCompleting here, let finishCountdown handle it)
     finishCountdown(true);
   }
 }
 
 function startCountdown() {
-  console.log("startCountdown called");
-  console.log("countdownState:", countdownState);
-
   if (countdownState.isRunning) {
-    console.log("Already running, returning");
     return;
   }
 
   const now = Date.now();
   if (!countdownState.hasSession) {
     const targetMs = getConfiguredTimerMs();
-    console.log("Target duration (ms):", targetMs);
 
     if (targetMs <= 0) {
       alert("Please set a timer duration greater than zero.");
@@ -230,7 +290,6 @@ function startCountdown() {
   countdownState.interval = setInterval(updateCountdownDisplay, 250);
   updateCountdownDisplay();
   updateCountdownButtons();
-  console.log("Countdown started");
 }
 
 function pauseCountdown() {
@@ -259,15 +318,30 @@ function resetCountdown() {
   countdownState.elapsedBeforePause = 0;
   countdownState.isRunning = false;
   countdownState.hasSession = false;
+  countdownState.isCompleting = false;
   updateCountdownDisplay();
   updateCountdownButtons();
 }
 
 async function finishCountdown(autoComplete = false) {
-  if (!countdownState.hasSession) return;
+  // Prevent multiple simultaneous calls
+  if (!countdownState.hasSession) {
+    return;
+  }
 
+  if (countdownState.isCompleting) {
+    return;
+  }
+
+  // Check if elapsed time is valid before doing anything
   const totalElapsed = getCountdownElapsed();
-  if (totalElapsed <= 0) return;
+
+  if (totalElapsed <= 0) {
+    return;
+  }
+
+  // NOW mark as completing to prevent duplicate calls
+  countdownState.isCompleting = true;
 
   let durationSeconds = totalElapsed / 1000;
 
@@ -296,12 +370,21 @@ async function finishCountdown(autoComplete = false) {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || "Failed to save session");
+      throw new Error(error.detail || `Failed to save session (HTTP ${response.status})`);
     }
 
-    await Promise.all([loadSessions(), loadStats()]);
+    try {
+      await Promise.all([loadSessions(), loadStats()]);
+
+      if (autoComplete) {
+        // Show modal for auto-complete
+        showCountdownModal();
+      }
+    } catch (reloadError) {
+      alert("Session saved but failed to refresh data. Refresh the page to see updates.");
+    }
   } catch (error) {
-    alert(error.message || "Something went wrong.");
+    alert("❌ Error: " + (error.message || "Failed to save session. Check console for details."));
   } finally {
     resetCountdown();
   }
@@ -319,21 +402,16 @@ function updateCountdownButtons() {
 }
 
 function applyTimerPreset(totalSeconds) {
-  console.log("applyTimerPreset called with:", totalSeconds);
-
   if (countdownState.hasSession) {
-    console.log("Session active, cannot change preset");
     return;
   }
 
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = Math.floor(totalSeconds % 60);
 
-  console.log("Setting minutes to:", minutes, "seconds to:", seconds);
   timerMinutesInput.value = String(minutes);
   timerSecondsInput.value = String(seconds);
   updateCountdownDisplay();
-  console.log("Preset applied");
 }
 
 // Data Functions
@@ -420,12 +498,6 @@ async function deleteSession(sessionId) {
 
 // Event Listeners
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("DOM loaded");
-  console.log("Countdown start button:", countdownStartButton);
-  console.log("Timer minutes input:", timerMinutesInput);
-  console.log("Timer seconds input:", timerSecondsInput);
-  console.log("Preset buttons:", timerPresetButtons);
-
   // Initialize displays
   updateStopwatchDisplay();
   updateCountdownDisplay();
@@ -438,9 +510,32 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (error) {
     console.error(error);
   }
-
-  console.log("Initialization complete");
 });
+
+// Modal functions
+function getRandomQuote() {
+  return quotes[Math.floor(Math.random() * quotes.length)];
+}
+
+function showCountdownModal() {
+  const modal = document.getElementById("countdown-complete-modal");
+  const quoteElement = document.getElementById("meditation-quote");
+
+  if (quoteElement) {
+    quoteElement.textContent = getRandomQuote();
+  }
+
+  if (modal) {
+    modal.classList.add("show");
+  }
+}
+
+function closeCountdownModal() {
+  const modal = document.getElementById("countdown-complete-modal");
+  if (modal) {
+    modal.classList.remove("show");
+  }
+}
 
 // Stopwatch buttons
 startButton.addEventListener("click", startStopwatch);
@@ -449,25 +544,17 @@ finishButton.addEventListener("click", () => finishStopwatch());
 
 // Countdown buttons
 if (countdownStartButton) {
-  console.log("Countdown start button found, adding listener");
   countdownStartButton.addEventListener("click", () => {
-    console.log("Countdown start button clicked!");
     startCountdown();
   });
-} else {
-  console.error("Countdown start button NOT found!");
 }
 
 if (countdownPauseButton) {
   countdownPauseButton.addEventListener("click", pauseCountdown);
-} else {
-  console.error("Countdown pause button NOT found!");
 }
 
 if (countdownFinishButton) {
   countdownFinishButton.addEventListener("click", () => finishCountdown(false));
-} else {
-  console.error("Countdown finish button NOT found!");
 }
 
 // Timer input changes
@@ -475,13 +562,9 @@ timerMinutesInput.addEventListener("input", updateCountdownDisplay);
 timerSecondsInput.addEventListener("input", updateCountdownDisplay);
 
 // Preset buttons
-console.log("Found", timerPresetButtons.length, "preset buttons");
-timerPresetButtons.forEach((button, index) => {
-  console.log(`Preset button ${index}:`, button.dataset.timerPreset);
+timerPresetButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    console.log("Preset button clicked!");
     const presetSeconds = Number(button.dataset.timerPreset);
-    console.log("Preset seconds:", presetSeconds);
     if (presetSeconds > 0) {
       applyTimerPreset(presetSeconds);
     }

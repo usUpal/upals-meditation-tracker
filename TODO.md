@@ -1,0 +1,4 @@
+- github style monthy progress bar
+- pie chart, 
+- meditation jounal, after every meditaion, there will be asked for journal, how I am feeling after this sessions. 
+- integrate ai how to improve myself, which time is best for me to meditate, intergrate AI stack there. 

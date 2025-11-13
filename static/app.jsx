@@ -30,6 +30,7 @@ function Sidebar({ isOpen, currentPage, onNavigate, onToggle }) {
   const menuItems = [
     { id: "meditation", label: "Meditation", icon: "🧘" },
     { id: "pomodoro", label: "Pomodoro", icon: "🍅" },
+    { id: "journal", label: "Journal", icon: "📔" },
   ];
 
   return (
@@ -102,6 +103,35 @@ function PomodoroPage() {
         <div className="text-6xl mb-6">🍅</div>
         <h2 className="text-2xl font-semibold text-slate-900 mb-2">
           Pomodoro Timer
+        </h2>
+        <p className="text-slate-600">
+          This feature is under development. Check back soon!
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Journal Page Component
+function JournalPage() {
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 py-10">
+      <header className="mb-10 space-y-3">
+        <p className="inline-flex rounded-full bg-slate-900/90 px-4 py-1 text-sm font-semibold text-slate-100 shadow">
+          Journal 📔
+        </p>
+        <h1 className="text-4xl font-bold text-slate-900 sm:text-5xl">
+          Meditation Journal
+        </h1>
+        <p className="max-w-2xl text-base text-slate-600">
+          Coming soon! Track your meditation insights and reflections.
+        </p>
+      </header>
+
+      <div className="rounded-3xl bg-white/95 p-12 text-center shadow-lg ring-1 ring-slate-200">
+        <div className="text-6xl mb-6">📔</div>
+        <h2 className="text-2xl font-semibold text-slate-900 mb-2">
+          Journal
         </h2>
         <p className="text-slate-600">
           This feature is under development. Check back soon!
@@ -1226,6 +1256,9 @@ function MeditationApp() {
 
           {/* Pomodoro Page Content */}
           {currentPage === "pomodoro" && <PomodoroPage />}
+
+          {/* Journal Page Content */}
+          {currentPage === "journal" && <JournalPage />}
         </div>
 
         <PasswordModal

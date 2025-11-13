@@ -61,8 +61,8 @@ function Sidebar({ isOpen, currentPage, onNavigate, onToggle }) {
               type="button"
               onClick={() => onNavigate(item.id)}
               className={`flex w-full items-center gap-3 border-l-4 px-5 py-4 text-left text-base font-semibold transition-all ${currentPage === item.id
-                  ? "border-l-blue-600 bg-blue-100 text-blue-900 shadow-md"
-                  : "border-l-transparent text-slate-700 hover:border-l-slate-400 hover:bg-slate-100 hover:text-slate-900"
+                ? "border-l-blue-600 bg-blue-100 text-blue-900 shadow-md"
+                : "border-l-transparent text-slate-700 hover:border-l-slate-400 hover:bg-slate-100 hover:text-slate-900"
                 }`}
             >
               <span className="text-2xl">{item.icon}</span>

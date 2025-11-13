@@ -25,6 +25,95 @@ const TIMER_PRESETS = [
 const YOUTUBE_EMBED =
   "https://www.youtube.com/embed/8sYK7lm3UKg?si=5-UyVXF5I7VI6rkg";
 
+// Sidebar Component
+function Sidebar({ isOpen, currentPage, onNavigate, onToggle }) {
+  const menuItems = [
+    { id: "meditation", label: "Meditation", icon: "🧘" },
+    { id: "pomodoro", label: "Pomodoro", icon: "🍅" },
+  ];
+
+  return (
+    <>
+      {/* Sidebar Toggle Button */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`fixed top-5 z-50 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-700 text-2xl text-white shadow-2xl ring-2 ring-slate-600 transition-all hover:bg-slate-600 hover:ring-slate-500 hover:shadow-xl ${
+          isOpen ? "left-[270px]" : "left-5"
+        }`}
+      >
+        {isOpen ? "◀" : "☰"}
+      </button>
+
+      {/* Sidebar */}
+      <div
+        className={`fixed left-0 top-0 z-40 h-full w-64 transform bg-gradient-to-b from-slate-200 to-slate-300 shadow-2xl transition-transform duration-300 ${
+          isOpen ? "translate-x-0" : "-translate-x-64"
+        }`}
+      >
+        <div className="flex h-16 items-center justify-between border-b-2 border-slate-400/50 bg-slate-300/80 px-5 backdrop-blur">
+          <h2 className="text-lg font-bold text-slate-800">Menu</h2>
+        </div>
+
+        <nav className="py-4">
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onNavigate(item.id)}
+              className={`flex w-full items-center gap-3 border-l-4 px-5 py-4 text-left text-base font-semibold transition-all ${
+                currentPage === item.id
+                  ? "border-l-blue-600 bg-blue-100 text-blue-900 shadow-md"
+                  : "border-l-transparent text-slate-700 hover:border-l-slate-400 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <span className="text-2xl">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Overlay for mobile */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={onToggle}
+        />
+      )}
+    </>
+  );
+}
+
+// Pomodoro Page Component
+function PomodoroPage() {
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 py-10">
+      <header className="mb-10 space-y-3">
+        <p className="inline-flex rounded-full bg-slate-900/90 px-4 py-1 text-sm font-semibold text-slate-100 shadow">
+          Pomodoro Timer 🍅
+        </p>
+        <h1 className="text-4xl font-bold text-slate-900 sm:text-5xl">
+          Focus & Productivity
+        </h1>
+        <p className="max-w-2xl text-base text-slate-600">
+          Coming soon! Use the Pomodoro Technique to boost your productivity.
+        </p>
+      </header>
+
+      <div className="rounded-3xl bg-white/95 p-12 text-center shadow-lg ring-1 ring-slate-200">
+        <div className="text-6xl mb-6">🍅</div>
+        <h2 className="text-2xl font-semibold text-slate-900 mb-2">
+          Pomodoro Timer
+        </h2>
+        <p className="text-slate-600">
+          This feature is under development. Check back soon!
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function createInitialStopwatchState() {
   return {
     elapsedMs: 0,
@@ -239,6 +328,10 @@ function MeditationApp() {
   const [authExpiry, setAuthExpiry] = useState(null);
   const authTimeoutRef = useRef(null);
 
+  // Sidebar and navigation state
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [currentPage, setCurrentPage] = useState("meditation");
+
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [dataError, setDataError] = useState("");
   const [sessions, setSessions] = useState([]);
@@ -354,12 +447,12 @@ function MeditationApp() {
       const next = prev.hasSession
         ? { ...prev, isRunning: true, startTimestamp: now }
         : {
-            ...createInitialStopwatchState(),
-            isRunning: true,
-            hasSession: true,
-            startTimestamp: now,
-            initialStartTimestamp: now,
-          };
+          ...createInitialStopwatchState(),
+          isRunning: true,
+          hasSession: true,
+          startTimestamp: now,
+          initialStartTimestamp: now,
+        };
       stopwatchRef.current = next;
       return next;
     });
@@ -745,7 +838,7 @@ function MeditationApp() {
       (stopwatch.isRunning && stopwatch.startTimestamp
         ? renderNow - stopwatch.startTimestamp
         : 0)) /
-      1000
+    1000
   );
 
   const countdownElapsedMs =
@@ -772,364 +865,387 @@ function MeditationApp() {
   const isStatsLoading = isLoadingData && !stats;
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-slate-100 via-slate-100 to-slate-200 pb-16">
+    <div className="relative min-h-screen bg-gradient-to-b from-slate-100 via-slate-100 to-slate-200">
+      {/* Sidebar */}
+      {isAuthenticated && (
+        <Sidebar
+          isOpen={sidebarOpen}
+          currentPage={currentPage}
+          onNavigate={setCurrentPage}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+        />
+      )}
+
+      {/* Main Content */}
       <div
-        className={`mx-auto w-full max-w-6xl px-4 py-10 transition duration-300 ${
-          isAuthenticated ? "" : "pointer-events-none blur-md"
-        }`}
+        className={`min-h-screen pb-16 transition-all duration-300 ${isAuthenticated && sidebarOpen ? "lg:ml-64" : ""
+          }`}
       >
-        <header className="mb-10 space-y-3">
-          <p className="inline-flex rounded-full bg-slate-900/90 px-4 py-1 text-sm font-semibold text-slate-100 shadow">
-            Upal&apos;s Meditation Tracker 🕉️
-          </p>
-          <h1 className="text-4xl font-bold text-slate-900 sm:text-5xl">
-            Track, reflect, and celebrate your practice.
-          </h1>
-          <p className="max-w-2xl text-base text-slate-600">
-            Use the stopwatch or countdown timer to log sessions, stay aligned
-            with your weekly target, and review your progress over time.
-          </p>
-          {isLoadingData ? (
-            <p className="text-sm font-medium text-slate-500">
-              Refreshing your latest stats…
-            </p>
-          ) : null}
-        </header>
-
-        {dataError ? (
-          <div className="mb-6 rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-            {dataError}
-          </div>
-        ) : null}
-
-        <section className="mb-8">
-          <div className="relative overflow-hidden rounded-3xl bg-white/90 shadow-lg ring-1 ring-slate-200">
-            <div className="aspect-video">
-              <iframe
-                className="h-full w-full"
-                src={YOUTUBE_EMBED}
-                title="Meditation guidance"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
-            </div>
-          </div>
-        </section>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">
-            <div className="flex items-start justify-between gap-6">
-              <div>
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Stopwatch
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Start and pause freely, then finish to log a session.
+        <div
+          className={`mx-auto w-full max-w-6xl px-4 py-10 transition duration-300 ${isAuthenticated ? "" : "pointer-events-none blur-md"
+            }`}
+        >
+          {/* Meditation Page Content */}
+          {currentPage === "meditation" && (
+            <>
+              <header className="mb-10 space-y-3">
+                <p className="inline-flex rounded-full bg-slate-900/90 px-4 py-1 text-sm font-semibold text-slate-100 shadow">
+                  Upal&apos;s Meditation Tracker 🕉️
                 </p>
-              </div>
-            </div>
-            <div className="mt-8 text-center">
-              <div className="font-mono text-4xl font-semibold tracking-widest text-slate-900 sm:text-5xl">
-                {stopwatchDisplay}
-              </div>
-            </div>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <GradientButton
-                type="button"
-                disabled={stopwatch.isRunning}
-                onClick={handleStopwatchStart}
-                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
-              >
-                Start / Resume
-              </GradientButton>
-              <GradientButton
-                type="button"
-                disabled={!stopwatch.isRunning}
-                onClick={handleStopwatchPause}
-                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
-              >
-                Pause
-              </GradientButton>
-              <GradientButton
-                type="button"
-                disabled={!stopwatch.hasSession}
-                onClick={handleStopwatchFinish}
-                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
-              >
-                Finish
-              </GradientButton>
-            </div>
-          </section>
-
-          <section className="rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">
-            <div className="flex items-start justify-between gap-6">
-              <div>
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Countdown Timer
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Set a duration, start the timer, and we&apos;ll log it when you
-                  finish.
+                <h1 className="text-4xl font-bold text-slate-900 sm:text-5xl">
+                  Track, reflect, and celebrate your practice...
+                </h1>
+                <p className="max-w-2xl text-base text-slate-600">
+                  Use the stopwatch or countdown timer to log sessions, stay aligned
+                  with your weekly target, and review your progress over time.
                 </p>
-              </div>
-              <button
-                type="button"
-                className="text-sm font-semibold text-slate-500 transition hover:text-slate-700"
-                onClick={handleCountdownReset}
-              >
-                Reset
-              </button>
-            </div>
-
-            <div className="mt-6 flex flex-col items-center gap-5">
-              <div className="flex flex-wrap items-center justify-center gap-4">
-                <label className="text-sm font-medium text-slate-600" htmlFor="timer-minutes">
-                  Minutes
-                </label>
-                <input
-                  id="timer-minutes"
-                  type="number"
-                  min="0"
-                  max="999"
-                  inputMode="numeric"
-                  value={timerInputs.minutes}
-                  disabled={countdown.hasSession}
-                  onChange={(event) =>
-                    handleTimerInputChange("minutes", event.target.value)
-                  }
-                  className="w-24 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center text-lg font-semibold text-slate-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 disabled:bg-slate-100 disabled:text-slate-400"
-                />
-                <label className="text-sm font-medium text-slate-600" htmlFor="timer-seconds">
-                  Seconds
-                </label>
-                <input
-                  id="timer-seconds"
-                  type="number"
-                  min="0"
-                  max="59"
-                  inputMode="numeric"
-                  value={timerInputs.seconds}
-                  disabled={countdown.hasSession}
-                  onChange={(event) =>
-                    handleTimerInputChange("seconds", event.target.value)
-                  }
-                  className="w-24 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center text-lg font-semibold text-slate-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 disabled:bg-slate-100 disabled:text-slate-400"
-                />
-              </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {TIMER_PRESETS.map((preset) => (
-                  <button
-                    key={preset.value}
-                    type="button"
-                    disabled={countdown.hasSession}
-                    onClick={() => applyTimerPreset(preset.value)}
-                    className="rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-8 text-center">
-              <div className="font-mono text-4xl font-semibold tracking-widest text-slate-900 sm:text-5xl">
-                {countdownDisplay}
-              </div>
-            </div>
-
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <GradientButton
-                type="button"
-                disabled={countdown.isRunning}
-                onClick={handleCountdownStart}
-                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
-              >
-                Start Countdown
-              </GradientButton>
-              <GradientButton
-                type="button"
-                disabled={!countdown.isRunning}
-                onClick={handleCountdownPause}
-                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
-              >
-                Pause
-              </GradientButton>
-              <GradientButton
-                type="button"
-                disabled={!countdown.hasSession}
-                onClick={() => handleCountdownFinish(false)}
-                className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
-              >
-                Finish
-              </GradientButton>
-            </div>
-          </section>
-        </div>
-
-        <section className="mt-6 rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">
-          <h2 className="text-xl font-semibold text-slate-900">Your Stats</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Keep an eye on your consistency across different time horizons.
-          </p>
-          {isStatsLoading ? (
-            <div
-              className="mt-6 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-600"
-              aria-live="polite"
-            >
-              <span
-                className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-[#CA6A51]"
-                aria-hidden="true"
-              />
-              Loading your progress…
-            </div>
-          ) : (
-            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <StatCard
-                label="This Week"
-                value={formatDurationHMS(statsSnapshot.weekly_seconds)}
-              />
-              <StatCard
-                label="This Month"
-                value={formatDurationHMS(statsSnapshot.monthly_seconds)}
-              />
-              <StatCard
-                label="This Year"
-                value={formatDurationHMS(statsSnapshot.yearly_seconds)}
-              />
-              <StatCard
-                label="All Time Total"
-                value={formatDurationHMS(statsSnapshot.total_seconds)}
-              />
-              <StatCard
-                label="Total Sessions"
-                value={statsSnapshot.total_sessions}
-              />
-              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-600">
-                    Weekly Target
+                {isLoadingData ? (
+                  <p className="text-sm font-medium text-slate-500">
+                    Refreshing your latest stats…
                   </p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {formatDurationHMS(weeklyTargetSeconds)}
-                  </p>
+                ) : null}
+              </header>
+
+              {dataError ? (
+                <div className="mb-6 rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                  {dataError}
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="h-3 w-full rounded-full bg-[#F3E1D9]">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#E8A68F] via-[#D98469] to-[#CA6A51] transition-all"
-                      style={{ width: weeklyProgressWidth }}
+              ) : null}
+
+              <section className="mb-8">
+                <div className="relative overflow-hidden rounded-3xl bg-white/90 shadow-lg ring-1 ring-slate-200">
+                  <div className="aspect-video">
+                    <iframe
+                      className="h-full w-full"
+                      src={YOUTUBE_EMBED}
+                      title="Meditation guidance"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
                     />
                   </div>
-                  <span className="text-sm font-semibold text-slate-600">
-                    {weeklyProgressLabel}
-                  </span>
                 </div>
-                <form className="space-y-3" onSubmit={handleWeeklyGoalSubmit}>
-                  <label
-                    className="text-sm font-medium text-slate-600"
-                    htmlFor="weekly-goal-input"
-                  >
-                    Update target (minutes)
-                  </label>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <input
-                      id="weekly-goal-input"
-                      type="number"
-                      min="1"
-                      step="1"
-                      ref={weeklyGoalInputRef}
-                      value={weeklyGoalMinutes}
-                      onChange={(event) => setWeeklyGoalMinutes(event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-base font-semibold text-slate-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                    />
+              </section>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section className="rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">
+                  <div className="flex items-start justify-between gap-6">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-900">
+                        Stopwatch
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Start and pause freely, then finish to log a session.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-8 text-center">
+                    <div className="font-mono text-4xl font-semibold tracking-widest text-slate-900 sm:text-5xl">
+                      {stopwatchDisplay}
+                    </div>
+                  </div>
+                  <div className="mt-8 flex flex-wrap justify-center gap-3">
                     <GradientButton
-                      type="submit"
-                      className="sm:w-auto from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
-                      disabled={isSavingWeeklyGoal}
+                      type="button"
+                      disabled={stopwatch.isRunning}
+                      onClick={handleStopwatchStart}
+                      className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
                     >
-                      {isSavingWeeklyGoal ? "Saving…" : "Save"}
+                      Start / Resume
+                    </GradientButton>
+                    <GradientButton
+                      type="button"
+                      disabled={!stopwatch.isRunning}
+                      onClick={handleStopwatchPause}
+                      className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
+                    >
+                      Pause
+                    </GradientButton>
+                    <GradientButton
+                      type="button"
+                      disabled={!stopwatch.hasSession}
+                      onClick={handleStopwatchFinish}
+                      className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
+                    >
+                      Finish
                     </GradientButton>
                   </div>
-                </form>
+                </section>
+
+                <section className="rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">
+                  <div className="flex items-start justify-between gap-6">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-900">
+                        Countdown Timer
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Set a duration, start the timer, and we&apos;ll log it when you
+                        finish.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-sm font-semibold text-slate-500 transition hover:text-slate-700"
+                      onClick={handleCountdownReset}
+                    >
+                      Reset
+                    </button>
+                  </div>
+
+                  <div className="mt-6 flex flex-col items-center gap-5">
+                    <div className="flex flex-wrap items-center justify-center gap-4">
+                      <label className="text-sm font-medium text-slate-600" htmlFor="timer-minutes">
+                        Minutes
+                      </label>
+                      <input
+                        id="timer-minutes"
+                        type="number"
+                        min="0"
+                        max="999"
+                        inputMode="numeric"
+                        value={timerInputs.minutes}
+                        disabled={countdown.hasSession}
+                        onChange={(event) =>
+                          handleTimerInputChange("minutes", event.target.value)
+                        }
+                        className="w-24 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center text-lg font-semibold text-slate-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 disabled:bg-slate-100 disabled:text-slate-400"
+                      />
+                      <label className="text-sm font-medium text-slate-600" htmlFor="timer-seconds">
+                        Seconds
+                      </label>
+                      <input
+                        id="timer-seconds"
+                        type="number"
+                        min="0"
+                        max="59"
+                        inputMode="numeric"
+                        value={timerInputs.seconds}
+                        disabled={countdown.hasSession}
+                        onChange={(event) =>
+                          handleTimerInputChange("seconds", event.target.value)
+                        }
+                        className="w-24 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center text-lg font-semibold text-slate-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 disabled:bg-slate-100 disabled:text-slate-400"
+                      />
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {TIMER_PRESETS.map((preset) => (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          disabled={countdown.hasSession}
+                          onClick={() => applyTimerPreset(preset.value)}
+                          className="rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-8 text-center">
+                    <div className="font-mono text-4xl font-semibold tracking-widest text-slate-900 sm:text-5xl">
+                      {countdownDisplay}
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex flex-wrap justify-center gap-3">
+                    <GradientButton
+                      type="button"
+                      disabled={countdown.isRunning}
+                      onClick={handleCountdownStart}
+                      className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
+                    >
+                      Start Countdown
+                    </GradientButton>
+                    <GradientButton
+                      type="button"
+                      disabled={!countdown.isRunning}
+                      onClick={handleCountdownPause}
+                      className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
+                    >
+                      Pause
+                    </GradientButton>
+                    <GradientButton
+                      type="button"
+                      disabled={!countdown.hasSession}
+                      onClick={() => handleCountdownFinish(false)}
+                      className="from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
+                    >
+                      Finish
+                    </GradientButton>
+                  </div>
+                </section>
               </div>
-            </div>
-          )}
-        </section>
 
-        <section className="mt-6 rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-semibold text-slate-900">
-              Session History
-            </h2>
-            <p className="text-sm text-slate-500">
-              {sessions.length
-                ? "Review, reflect, or remove logged sessions."
-                : "No sessions logged yet. Your next one will appear here."}
-            </p>
-          </div>
-          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-            <div className="max-h-[420px] overflow-y-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Start</th>
-                    <th className="px-4 py-3">End</th>
-                    <th className="px-4 py-3">Duration</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                  {sessions.length ? (
-                    sessions.map((session) => (
-                      <tr key={session.id}>
-                        <td className="px-4 py-3">{formatDateTime(session.start_time)}</td>
-                        <td className="px-4 py-3">{formatDateTime(session.end_time)}</td>
-                        <td className="px-4 py-3">
-                          {formatDurationHMS(session.duration_seconds)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSession(session.id)}
-                            className="inline-flex items-center rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:border-rose-300 hover:text-rose-700"
+              <section className="mt-6 rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">
+                <h2 className="text-xl font-semibold text-slate-900">Your Stats</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Keep an eye on your consistency across different time horizons.
+                </p>
+                {isStatsLoading ? (
+                  <div
+                    className="mt-6 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-600"
+                    aria-live="polite"
+                  >
+                    <span
+                      className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-[#CA6A51]"
+                      aria-hidden="true"
+                    />
+                    Loading your progress…
+                  </div>
+                ) : (
+                  <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <StatCard
+                      label="This Week"
+                      value={formatDurationHMS(statsSnapshot.weekly_seconds)}
+                    />
+                    <StatCard
+                      label="This Month"
+                      value={formatDurationHMS(statsSnapshot.monthly_seconds)}
+                    />
+                    <StatCard
+                      label="This Year"
+                      value={formatDurationHMS(statsSnapshot.yearly_seconds)}
+                    />
+                    <StatCard
+                      label="All Time Total"
+                      value={formatDurationHMS(statsSnapshot.total_seconds)}
+                    />
+                    <StatCard
+                      label="Total Sessions"
+                      value={statsSnapshot.total_sessions}
+                    />
+                    <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div>
+                        <p className="text-sm font-medium text-slate-600">
+                          Weekly Target
+                        </p>
+                        <p className="mt-1 text-2xl font-semibold text-slate-900">
+                          {formatDurationHMS(weeklyTargetSeconds)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="h-3 w-full rounded-full bg-[#F3E1D9]">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-[#E8A68F] via-[#D98469] to-[#CA6A51] transition-all"
+                            style={{ width: weeklyProgressWidth }}
+                          />
+                        </div>
+                        <span className="text-sm font-semibold text-slate-600">
+                          {weeklyProgressLabel}
+                        </span>
+                      </div>
+                      <form className="space-y-3" onSubmit={handleWeeklyGoalSubmit}>
+                        <label
+                          className="text-sm font-medium text-slate-600"
+                          htmlFor="weekly-goal-input"
+                        >
+                          Update target (minutes)
+                        </label>
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <input
+                            id="weekly-goal-input"
+                            type="number"
+                            min="1"
+                            step="1"
+                            ref={weeklyGoalInputRef}
+                            value={weeklyGoalMinutes}
+                            onChange={(event) => setWeeklyGoalMinutes(event.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-base font-semibold text-slate-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                          />
+                          <GradientButton
+                            type="submit"
+                            className="sm:w-auto from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
+                            disabled={isSavingWeeklyGoal}
                           >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        className="px-4 py-6 text-center text-sm text-slate-500"
-                        colSpan={4}
-                      >
-                        Nothing here yet — log a session to see it reflected.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+                            {isSavingWeeklyGoal ? "Saving…" : "Save"}
+                          </GradientButton>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="mt-6 rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="text-xl font-semibold text-slate-900">
+                    Session History
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    {sessions.length
+                      ? "Review, reflect, or remove logged sessions."
+                      : "No sessions logged yet. Your next one will appear here."}
+                  </p>
+                </div>
+                <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
+                  <div className="max-h-[420px] overflow-y-auto">
+                    <table className="min-w-full divide-y divide-slate-200">
+                      <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Start</th>
+                          <th className="px-4 py-3">End</th>
+                          <th className="px-4 py-3">Duration</th>
+                          <th className="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+                        {sessions.length ? (
+                          sessions.map((session) => (
+                            <tr key={session.id}>
+                              <td className="px-4 py-3">{formatDateTime(session.start_time)}</td>
+                              <td className="px-4 py-3">{formatDateTime(session.end_time)}</td>
+                              <td className="px-4 py-3">
+                                {formatDurationHMS(session.duration_seconds)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSession(session.id)}
+                                  className="inline-flex items-center rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:border-rose-300 hover:text-rose-700"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td
+                              className="px-4 py-6 text-center text-sm text-slate-500"
+                              colSpan={4}
+                            >
+                              Nothing here yet — log a session to see it reflected.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+
+          {/* Pomodoro Page Content */}
+          {currentPage === "pomodoro" && <PomodoroPage />}
+        </div>
+
+        <PasswordModal
+          isVisible={!isAuthenticated}
+          password={password}
+          onPasswordChange={setPassword}
+          onSubmit={handlePasswordSubmit}
+          error={passwordError}
+          inputRef={passwordInputRef}
+        />
+
+        <CountdownCompleteModal
+          open={showCountdownModal}
+          quote={modalQuote}
+          onClose={() => setShowCountdownModal(false)}
+        />
       </div>
-
-      <PasswordModal
-        isVisible={!isAuthenticated}
-        password={password}
-        onPasswordChange={setPassword}
-        onSubmit={handlePasswordSubmit}
-        error={passwordError}
-        inputRef={passwordInputRef}
-      />
-
-      <CountdownCompleteModal
-        open={showCountdownModal}
-        quote={modalQuote}
-        onClose={() => setShowCountdownModal(false)}
-      />
     </div>
   );
 }

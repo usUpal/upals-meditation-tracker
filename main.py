@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, validator
 from pymongo import MongoClient
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from dotenv import load_dotenv
 
@@ -87,6 +88,18 @@ BASE_DIR = Path(__file__).resolve().parent
 app = FastAPI(title="Upal's Meditation Tracker")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# Add middleware to prevent caching during development
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+app.add_middleware(NoCacheMiddleware)
 
 
 def ensure_weekly_goal_default() -> None:

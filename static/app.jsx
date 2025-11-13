@@ -769,6 +769,7 @@ function MeditationApp() {
     weeklyTargetSeconds > 0
       ? `${clamp(statsSnapshot.weekly_progress_percentage, 0, 100)}%`
       : "0%";
+  const isStatsLoading = isLoadingData && !stats;
 
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-slate-100 via-slate-100 to-slate-200 pb-16">
@@ -971,78 +972,89 @@ function MeditationApp() {
           <p className="mt-1 text-sm text-slate-500">
             Keep an eye on your consistency across different time horizons.
           </p>
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <StatCard
-              label="This Week"
-              value={formatDurationHMS(statsSnapshot.weekly_seconds)}
-            />
-            <StatCard
-              label="This Month"
-              value={formatDurationHMS(statsSnapshot.monthly_seconds)}
-            />
-            <StatCard
-              label="This Year"
-              value={formatDurationHMS(statsSnapshot.yearly_seconds)}
-            />
-            <StatCard
-              label="All Time Total"
-              value={formatDurationHMS(statsSnapshot.total_seconds)}
-            />
-            <StatCard
-              label="Total Sessions"
-              value={statsSnapshot.total_sessions}
-            />
-            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-              <div>
-                <p className="text-sm font-medium text-slate-600">
-                  Weekly Target
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-slate-900">
-                  {formatDurationHMS(weeklyTargetSeconds)}
-                </p>
-              </div>
-              <div>
-              <div className="flex items-center gap-3">
-                <div className="h-3 w-full rounded-full bg-[#F3E1D9]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#E8A68F] via-[#D98469] to-[#CA6A51] transition-all"
-                    style={{ width: weeklyProgressWidth }}
-                  />
+          {isStatsLoading ? (
+            <div
+              className="mt-6 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-600"
+              aria-live="polite"
+            >
+              <span
+                className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-[#CA6A51]"
+                aria-hidden="true"
+              />
+              Loading your progress…
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <StatCard
+                label="This Week"
+                value={formatDurationHMS(statsSnapshot.weekly_seconds)}
+              />
+              <StatCard
+                label="This Month"
+                value={formatDurationHMS(statsSnapshot.monthly_seconds)}
+              />
+              <StatCard
+                label="This Year"
+                value={formatDurationHMS(statsSnapshot.yearly_seconds)}
+              />
+              <StatCard
+                label="All Time Total"
+                value={formatDurationHMS(statsSnapshot.total_seconds)}
+              />
+              <StatCard
+                label="Total Sessions"
+                value={statsSnapshot.total_sessions}
+              />
+              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-600">
+                    Weekly Target
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-slate-900">
+                    {formatDurationHMS(weeklyTargetSeconds)}
+                  </p>
                 </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-3 w-full rounded-full bg-[#F3E1D9]">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#E8A68F] via-[#D98469] to-[#CA6A51] transition-all"
+                      style={{ width: weeklyProgressWidth }}
+                    />
+                  </div>
                   <span className="text-sm font-semibold text-slate-600">
                     {weeklyProgressLabel}
                   </span>
                 </div>
-              </div>
-              <form className="space-y-3" onSubmit={handleWeeklyGoalSubmit}>
-                <label
-                  className="text-sm font-medium text-slate-600"
-                  htmlFor="weekly-goal-input"
-                >
-                  Update target (minutes)
-                </label>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input
-                    id="weekly-goal-input"
-                    type="number"
-                    min="1"
-                    step="1"
-                    ref={weeklyGoalInputRef}
-                    value={weeklyGoalMinutes}
-                    onChange={(event) => setWeeklyGoalMinutes(event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-base font-semibold text-slate-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                  />
-                  <GradientButton
-                    type="submit"
-                    className="sm:w-auto from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
-                    disabled={isSavingWeeklyGoal}
+                <form className="space-y-3" onSubmit={handleWeeklyGoalSubmit}>
+                  <label
+                    className="text-sm font-medium text-slate-600"
+                    htmlFor="weekly-goal-input"
                   >
-                    {isSavingWeeklyGoal ? "Saving…" : "Save"}
-                  </GradientButton>
-                </div>
-              </form>
+                    Update target (minutes)
+                  </label>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      id="weekly-goal-input"
+                      type="number"
+                      min="1"
+                      step="1"
+                      ref={weeklyGoalInputRef}
+                      value={weeklyGoalMinutes}
+                      onChange={(event) => setWeeklyGoalMinutes(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-base font-semibold text-slate-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                    />
+                    <GradientButton
+                      type="submit"
+                      className="sm:w-auto from-[#CA6A51] to-[#CA6A51] focus-visible:outline-[#CA6A51]"
+                      disabled={isSavingWeeklyGoal}
+                    >
+                      {isSavingWeeklyGoal ? "Saving…" : "Save"}
+                    </GradientButton>
+                  </div>
+                </form>
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         <section className="mt-6 rounded-3xl bg-white/95 p-6 shadow-lg ring-1 ring-slate-200 backdrop-blur">

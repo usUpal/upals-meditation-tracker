@@ -38,18 +38,16 @@ function Sidebar({ isOpen, currentPage, onNavigate, onToggle }) {
       <button
         type="button"
         onClick={onToggle}
-        className={`fixed top-5 z-50 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-700 text-2xl text-white shadow-2xl ring-2 ring-slate-600 transition-all hover:bg-slate-600 hover:ring-slate-500 hover:shadow-xl ${
-          isOpen ? "left-[270px]" : "left-5"
-        }`}
+        className={`fixed top-5 z-50 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-700 text-2xl text-white shadow-2xl ring-2 ring-slate-600 transition-all hover:bg-slate-600 hover:ring-slate-500 hover:shadow-xl ${isOpen ? "left-[270px]" : "left-5"
+          }`}
       >
         {isOpen ? "◀" : "☰"}
       </button>
 
       {/* Sidebar */}
       <div
-        className={`fixed left-0 top-0 z-40 h-full w-64 transform bg-gradient-to-b from-slate-200 to-slate-300 shadow-2xl transition-transform duration-300 ${
-          isOpen ? "translate-x-0" : "-translate-x-64"
-        }`}
+        className={`fixed left-0 top-0 z-40 h-full w-64 transform bg-gradient-to-b from-slate-200 to-slate-300 shadow-2xl transition-transform duration-300 ${isOpen ? "translate-x-0" : "-translate-x-64"
+          }`}
       >
         <div className="flex h-16 items-center justify-between border-b-2 border-slate-400/50 bg-slate-300/80 px-5 backdrop-blur">
           <h2 className="text-lg font-bold text-slate-800">Menu</h2>
@@ -61,11 +59,10 @@ function Sidebar({ isOpen, currentPage, onNavigate, onToggle }) {
               key={item.id}
               type="button"
               onClick={() => onNavigate(item.id)}
-              className={`flex w-full items-center gap-3 border-l-4 px-5 py-4 text-left text-base font-semibold transition-all ${
-                currentPage === item.id
+              className={`flex w-full items-center gap-3 border-l-4 px-5 py-4 text-left text-base font-semibold transition-all ${currentPage === item.id
                   ? "border-l-blue-600 bg-blue-100 text-blue-900 shadow-md"
                   : "border-l-transparent text-slate-700 hover:border-l-slate-400 hover:bg-slate-100 hover:text-slate-900"
-              }`}
+                }`}
             >
               <span className="text-2xl">{item.icon}</span>
               <span>{item.label}</span>

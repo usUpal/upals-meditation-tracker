@@ -24,13 +24,17 @@ if not MONGODB_URI:
 DATABASE_NAME = "upals-meditation-tracker"
 SESSIONS_COLLECTION = "sessions"
 WEEKLY_GOAL_COLLECTION = "weekly_goal"
+BUDGET_COLLECTION = "budget"
 WEEKLY_GOAL_DOCUMENT_ID = "default"
+BUDGET_DOCUMENT_ID = "default"
 DEFAULT_WEEKLY_TARGET_SECONDS = 3600.0
+DEFAULT_DAILY_BUDGET = 100.0
 
 client = MongoClient(MONGODB_URI)
 db = client[DATABASE_NAME]
 sessions_collection = db[SESSIONS_COLLECTION]
 weekly_goal_collection = db[WEEKLY_GOAL_COLLECTION]
+budget_collection = db[BUDGET_COLLECTION]
 
 
 class SessionCreate(BaseModel):
@@ -83,6 +87,28 @@ class WeeklyGoalUpdate(BaseModel):
         return value
 
 
+class BudgetSpending(BaseModel):
+    date: str  # Format: YYYY-MM-DD
+    amount: float
+    note: str = ""
+
+    @validator("amount")
+    def validate_amount(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("Amount cannot be negative.")
+        return value
+
+
+class BudgetConfig(BaseModel):
+    daily_budget: float
+
+    @validator("daily_budget")
+    def validate_daily_budget(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("Daily budget must be greater than zero.")
+        return value
+
+
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="Upal's Meditation Tracker")
@@ -108,6 +134,16 @@ def ensure_weekly_goal_default() -> None:
         {"$setOnInsert": {"target_seconds": DEFAULT_WEEKLY_TARGET_SECONDS}},
         upsert=True,
     )
+
+
+def ensure_budget_default() -> None:
+    # Delete and recreate to clear bad data
+    budget_collection.delete_one({"_id": BUDGET_DOCUMENT_ID})
+    budget_collection.insert_one({
+        "_id": BUDGET_DOCUMENT_ID,
+        "daily_budget": DEFAULT_DAILY_BUDGET,
+        "spendings": [],
+    })
 
 
 def get_weekly_goal_document() -> dict:
@@ -141,6 +177,7 @@ def aggregate_duration(filter_query: dict | None = None) -> float:
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_weekly_goal_default()
+    ensure_budget_default()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -220,6 +257,81 @@ def get_stats() -> StatsResponse:
         weekly_target_seconds=weekly_target_seconds,
         weekly_progress_percentage=weekly_progress_percentage,
     )
+
+
+@app.get("/api/budget/config")
+def get_budget_config():
+    budget = budget_collection.find_one({"_id": BUDGET_DOCUMENT_ID})
+    if budget is None:
+        ensure_budget_default()
+        budget = budget_collection.find_one({"_id": BUDGET_DOCUMENT_ID})
+    return {
+        "daily_budget": float(budget.get("daily_budget", DEFAULT_DAILY_BUDGET)),
+    }
+
+
+@app.put("/api/budget/config")
+def update_budget_config(payload: BudgetConfig):
+    budget_collection.update_one(
+        {"_id": BUDGET_DOCUMENT_ID},
+        {"$set": {"daily_budget": float(payload.daily_budget)}},
+        upsert=True,
+    )
+    return {"daily_budget": float(payload.daily_budget)}
+
+
+@app.get("/api/budget/spendings")
+def get_spendings():
+    budget = budget_collection.find_one({"_id": BUDGET_DOCUMENT_ID})
+    if not budget:
+        return {"spendings": []}
+    
+    spendings = budget.get("spendings", [])
+    # Clean spendings to only include serializable fields
+    cleaned_spendings = []
+    for spending in spendings:
+        cleaned_spendings.append({
+            "date": spending.get("date", ""),
+            "amount": float(spending.get("amount", 0)),
+            "note": spending.get("note", ""),
+        })
+    
+    return {"spendings": cleaned_spendings}
+
+
+@app.post("/api/budget/spendings")
+def add_spending(payload: BudgetSpending):
+    spending = {
+        "date": payload.date,
+        "amount": float(payload.amount),
+        "note": payload.note,
+    }
+
+    budget_collection.update_one(
+        {"_id": BUDGET_DOCUMENT_ID},
+        {"$push": {"spendings": spending}},
+        upsert=True,
+    )
+
+    return spending
+
+
+@app.delete("/api/budget/spendings/{spending_date}/{spending_amount}")
+def delete_spending(spending_date: str, spending_amount: float):
+    try:
+        spending_amount_float = float(spending_amount)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid amount")
+    
+    result = budget_collection.update_one(
+        {"_id": BUDGET_DOCUMENT_ID},
+        {"$pull": {"spendings": {"date": spending_date, "amount": spending_amount_float}}},
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Spending not found")
+
+    return {"message": "Spending deleted"}
 
 
 if __name__ == "__main__":

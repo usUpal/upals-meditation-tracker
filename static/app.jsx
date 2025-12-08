@@ -31,6 +31,7 @@ function Sidebar({ isOpen, currentPage, onNavigate, onToggle }) {
     { id: "meditation", label: "Meditation", icon: "🧘" },
     { id: "pomodoro", label: "Pomodoro", icon: "🍅" },
     { id: "journal", label: "Journal", icon: "📔" },
+    { id: "finance", label: "Finance", icon: "💰" },
   ];
 
   return (
@@ -136,6 +137,254 @@ function JournalPage() {
         <p className="text-slate-600">
           This feature is under development. Check back soon!
         </p>
+      </div>
+    </div>
+  );
+}
+
+// Finance Page Component
+function FinancePage() {
+  const [dailyBudget, setDailyBudget] = useState(100);
+  const [spendings, setSpendings] = useState([]);
+  const [spendingAmount, setSpendingAmount] = useState("");
+  const [spendingNote, setSpendingNote] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [todayDate] = useState(new Date().toISOString().split("T")[0]);
+
+  // Fetch budget config and spendings on mount
+  useEffect(() => {
+    const fetchBudgetData = async () => {
+      try {
+        const [configRes, spendingsRes] = await Promise.all([
+          fetch("/api/budget/config"),
+          fetch("/api/budget/spendings"),
+        ]);
+
+        if (configRes.ok) {
+          const config = await configRes.json();
+          setDailyBudget(config.daily_budget);
+        }
+
+        if (spendingsRes.ok) {
+          const data = await spendingsRes.json();
+          setSpendings(data.spendings || []);
+        }
+      } catch (error) {
+        // Handle error silently
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBudgetData();
+  }, []);
+
+  // Calculate available balance with rollover
+  const calculateAvailableBalance = () => {
+    if (spendings.length === 0) return dailyBudget;
+
+    const today = new Date(todayDate);
+    let consecutiveEmptyDays = 0;
+    let currentDate = new Date(today);
+    currentDate.setDate(currentDate.getDate() - 1);
+
+    // Maximum days to look back to prevent infinite loop
+    const maxLookBackDays = 30;
+
+    // Count consecutive days with no spending going backwards
+    while (consecutiveEmptyDays < maxLookBackDays) {
+      const dateStr = currentDate.toISOString().split("T")[0];
+      const hasSpending = spendings.some((s) => s.date === dateStr);
+
+      if (!hasSpending) {
+        consecutiveEmptyDays++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    // Get today's spending
+    const todaySpending = spendings
+      .filter((s) => s.date === todayDate)
+      .reduce((sum, s) => sum + s.amount, 0);
+
+    // Calculate rollover: budget + (empty days * budget)
+    const totalAvailable = dailyBudget * (1 + consecutiveEmptyDays);
+    const available = totalAvailable - todaySpending;
+
+    return Math.max(0, available);
+  };
+
+  const getTodaySpending = () => {
+    return spendings
+      .filter((s) => s.date === todayDate)
+      .reduce((sum, s) => sum + s.amount, 0);
+  };
+
+  const handleAddSpending = async () => {
+    if (!spendingAmount || parseFloat(spendingAmount) <= 0) return;
+
+    try {
+      const response = await fetch("/api/budget/spendings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: todayDate,
+          amount: parseFloat(spendingAmount),
+          note: spendingNote,
+        }),
+      });
+
+      if (response.ok) {
+        const newSpending = await response.json();
+        setSpendings([...spendings, newSpending]);
+        setSpendingAmount("");
+        setSpendingNote("");
+      } else {
+        const errorData = await response.json();
+      }
+    } catch (error) {
+    }
+  };
+
+  const handleDeleteSpending = async (spending) => {
+    try {
+      const response = await fetch(
+        `/api/budget/spendings/${spending.date}/${spending.amount}`,
+        { method: "DELETE" }
+      );
+
+      if (response.ok) {
+        setSpendings(
+          spendings.filter(
+            (s) => !(s.date === spending.date && s.amount === spending.amount)
+          )
+        );
+      }
+    } catch (error) {
+      // Handle error silently
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 text-center">
+        <p className="text-slate-600">Loading...</p>
+      </div>
+    );
+  }
+
+  const availableBalance = calculateAvailableBalance();
+  const todaySpending = getTodaySpending();
+  const todaySpendings = spendings.filter((s) => s.date === todayDate);
+
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 py-10">
+      <header className="mb-10 space-y-3">
+        <p className="inline-flex rounded-full bg-teal-600/90 px-4 py-1 text-sm font-semibold text-white shadow">
+          Daily Budget 💰
+        </p>
+        <h1 className="text-4xl font-bold text-slate-900 sm:text-5xl">
+          Budget Tracker
+        </h1>
+        <p className="max-w-2xl text-base text-slate-600">
+          Track your daily spending with smart rollover system
+        </p>
+      </header>
+
+      {/* Available Balance Card */}
+      <div className="mb-8 rounded-3xl bg-gradient-to-br from-teal-500 to-teal-600 p-8 text-white shadow-lg">
+        <p className="text-sm font-semibold opacity-90">Available Today</p>
+        <p className="mt-3 text-5xl font-bold">৳{availableBalance.toFixed(2)}</p>
+        <p className="mt-4 text-sm opacity-90">
+          Today's Spent: <span className="font-semibold">৳{todaySpending.toFixed(2)}</span>
+        </p>
+      </div>
+
+      {/* Add Spending Section */}
+      <div className="mb-8 rounded-2xl bg-white/95 p-8 shadow-lg ring-1 ring-slate-200">
+        <div className="flex items-center gap-3 mb-6">
+          <span className="text-2xl">➕</span>
+          <h2 className="text-xl font-semibold text-slate-900">Add Spending</h2>
+        </div>
+
+        <input
+          type="number"
+          value={spendingAmount}
+          onChange={(e) => setSpendingAmount(e.target.value)}
+          placeholder="Enter amount (৳)"
+          className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 placeholder-slate-500 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 mb-4"
+        />
+
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {[20, 50, 100, 200].map((amount) => (
+            <button
+              key={amount}
+              onClick={() => setSpendingAmount(amount.toString())}
+              className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+            >
+              ৳{amount}
+            </button>
+          ))}
+        </div>
+
+        <input
+          type="text"
+          value={spendingNote}
+          onChange={(e) => setSpendingNote(e.target.value)}
+          placeholder="Add note (optional)"
+          className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 placeholder-slate-500 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 mb-4"
+        />
+
+        <button
+          onClick={handleAddSpending}
+          disabled={!spendingAmount || parseFloat(spendingAmount) <= 0}
+          className="w-full rounded-xl bg-gradient-to-r from-teal-500 to-teal-600 px-4 py-3 font-semibold text-white shadow-md hover:from-teal-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        >
+          + Add Spending
+        </button>
+      </div>
+
+      {/* Spending History */}
+      <div className="rounded-2xl bg-white/95 p-8 shadow-lg ring-1 ring-slate-200">
+        <h2 className="text-xl font-semibold text-slate-900 mb-6">
+          Today's Spending History
+        </h2>
+
+        {todaySpendings.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-5xl mb-4">📅</div>
+            <p className="text-slate-600 text-lg">No spending yet</p>
+            <p className="text-slate-500 text-sm mt-2">
+              Your spending history will appear here
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {todaySpendings.map((spending, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between rounded-xl bg-slate-50 p-4 border-l-4 border-teal-500 hover:bg-slate-100 transition-colors"
+              >
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-900">
+                    ৳{spending.amount.toFixed(2)}
+                  </p>
+                  {spending.note && (
+                    <p className="text-sm text-slate-600">{spending.note}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleDeleteSpending(spending)}
+                  className="ml-4 text-slate-400 hover:text-red-600 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1259,6 +1508,9 @@ function MeditationApp() {
 
           {/* Journal Page Content */}
           {currentPage === "journal" && <JournalPage />}
+
+          {/* Finance Page Content */}
+          {currentPage === "finance" && <FinancePage />}
         </div>
 
         <PasswordModal

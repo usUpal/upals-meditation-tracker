@@ -143,6 +143,50 @@ function JournalPage() {
 }
 
 // Finance Page Component
+// Delete Confirmation Modal Component
+function DeleteConfirmModal({ isOpen, spending, onConfirm, onCancel }) {
+  if (!isOpen || !spending) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 backdrop-blur">
+      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl ring-1 ring-slate-200">
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+            <span className="text-3xl">🗑️</span>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">
+            Delete Spending?
+          </h2>
+          <p className="text-slate-600 mb-2">
+            Are you sure you want to delete this spending record?
+          </p>
+          <div className="bg-slate-50 rounded-xl p-4 mb-6">
+            <p className="font-bold text-xl text-slate-900">৳{spending.amount.toFixed(2)}</p>
+            {spending.note && (
+              <p className="text-sm text-slate-600 mt-1">{spending.note}</p>
+            )}
+            <p className="text-xs text-slate-500 mt-2">{spending.date}</p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border-2 border-slate-200 bg-white px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 font-semibold text-white shadow-md hover:from-red-600 hover:to-red-700 transition-all"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FinancePage() {
   const [dailyBudget, setDailyBudget] = useState(100);
   const [spendings, setSpendings] = useState([]);
@@ -150,6 +194,10 @@ function FinancePage() {
   const [spendingNote, setSpendingNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [todayDate] = useState(new Date().toISOString().split("T")[0]);
+  
+  // Delete confirmation modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [spendingToDelete, setSpendingToDelete] = useState(null);
 
   // Fetch budget config and spendings on mount
   useEffect(() => {
@@ -179,47 +227,70 @@ function FinancePage() {
     fetchBudgetData();
   }, []);
 
-  // Calculate available balance with rollover
-  const calculateAvailableBalance = () => {
-    if (spendings.length === 0) return dailyBudget;
-
-    const today = new Date(todayDate);
-    let consecutiveEmptyDays = 0;
-    let currentDate = new Date(today);
-    currentDate.setDate(currentDate.getDate() - 1);
-
-    // Maximum days to look back to prevent infinite loop
-    const maxLookBackDays = 30;
-
-    // Count consecutive days with no spending going backwards
-    while (consecutiveEmptyDays < maxLookBackDays) {
-      const dateStr = currentDate.toISOString().split("T")[0];
-      const hasSpending = spendings.some((s) => s.date === dateStr);
-
-      if (!hasSpending) {
-        consecutiveEmptyDays++;
-        currentDate.setDate(currentDate.getDate() - 1);
-      } else {
-        break;
-      }
-    }
-
-    // Get today's spending
+  // Calculate available balance for today (simple: daily budget - today's spending)
+  const calculateAvailableToday = () => {
     const todaySpending = spendings
       .filter((s) => s.date === todayDate)
       .reduce((sum, s) => sum + s.amount, 0);
+    return Math.max(0, dailyBudget - todaySpending);
+  };
 
-    // Calculate rollover: budget + (empty days * budget)
-    const totalAvailable = dailyBudget * (1 + consecutiveEmptyDays);
-    const available = totalAvailable - todaySpending;
+  // Calculate available balance for the month (30 days budget - month's spending)
+  const calculateAvailableMonth = () => {
+    const monthlyBudget = dailyBudget * 30; // 30 days
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
-    return Math.max(0, available);
+    const monthSpending = spendings
+      .filter((s) => {
+        const spendingDate = new Date(s.date);
+        return spendingDate.getMonth() === currentMonth && 
+               spendingDate.getFullYear() === currentYear;
+      })
+      .reduce((sum, s) => sum + s.amount, 0);
+
+    return Math.max(0, monthlyBudget - monthSpending);
   };
 
   const getTodaySpending = () => {
     return spendings
       .filter((s) => s.date === todayDate)
       .reduce((sum, s) => sum + s.amount, 0);
+  };
+
+  // Get monthly spending data grouped by date
+  const getMonthlySpendingData = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Filter spendings for current month
+    const monthSpendings = spendings.filter((s) => {
+      const spendingDate = new Date(s.date);
+      return spendingDate.getMonth() === currentMonth && 
+             spendingDate.getFullYear() === currentYear;
+    });
+
+    // Group by date
+    const groupedByDate = {};
+    monthSpendings.forEach((s) => {
+      if (!groupedByDate[s.date]) {
+        groupedByDate[s.date] = { total: 0, items: [] };
+      }
+      groupedByDate[s.date].total += s.amount;
+      groupedByDate[s.date].items.push(s);
+    });
+
+    // Sort dates in descending order
+    const sortedDates = Object.keys(groupedByDate).sort((a, b) => 
+      new Date(b) - new Date(a)
+    );
+
+    // Calculate total for the month
+    const monthTotal = monthSpendings.reduce((sum, s) => sum + s.amount, 0);
+
+    return { groupedByDate, sortedDates, monthTotal };
   };
 
   const handleAddSpending = async () => {
@@ -248,22 +319,40 @@ function FinancePage() {
     }
   };
 
-  const handleDeleteSpending = async (spending) => {
+  // Open delete confirmation modal
+  const handleDeleteClick = (spending) => {
+    setSpendingToDelete(spending);
+    setDeleteModalOpen(true);
+  };
+
+  // Cancel delete
+  const handleDeleteCancel = () => {
+    setDeleteModalOpen(false);
+    setSpendingToDelete(null);
+  };
+
+  // Confirm delete
+  const handleDeleteConfirm = async () => {
+    if (!spendingToDelete) return;
+
     try {
       const response = await fetch(
-        `/api/budget/spendings/${spending.date}/${spending.amount}`,
+        `/api/budget/spendings/${spendingToDelete.date}/${spendingToDelete.amount}`,
         { method: "DELETE" }
       );
 
       if (response.ok) {
         setSpendings(
           spendings.filter(
-            (s) => !(s.date === spending.date && s.amount === spending.amount)
+            (s) => !(s.date === spendingToDelete.date && s.amount === spendingToDelete.amount)
           )
         );
       }
     } catch (error) {
       // Handle error silently
+    } finally {
+      setDeleteModalOpen(false);
+      setSpendingToDelete(null);
     }
   };
 
@@ -275,12 +364,31 @@ function FinancePage() {
     );
   }
 
-  const availableBalance = calculateAvailableBalance();
+  const availableToday = calculateAvailableToday();
+  const availableMonth = calculateAvailableMonth();
   const todaySpending = getTodaySpending();
   const todaySpendings = spendings.filter((s) => s.date === todayDate);
+  const { groupedByDate, sortedDates, monthTotal } = getMonthlySpendingData();
+
+  // Format date for display
+  const formatDisplayDate = (dateStr) => {
+    const date = new Date(dateStr);
+    const options = { weekday: 'short', month: 'short', day: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  };
+
+  const currentMonthName = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-10">
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteModalOpen}
+        spending={spendingToDelete}
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
+
       <header className="mb-10 space-y-3">
         <p className="inline-flex rounded-full bg-teal-600/90 px-4 py-1 text-sm font-semibold text-white shadow">
           Daily Budget 💰
@@ -293,13 +401,25 @@ function FinancePage() {
         </p>
       </header>
 
-      {/* Available Balance Card */}
-      <div className="mb-8 rounded-3xl bg-gradient-to-br from-teal-500 to-teal-600 p-8 text-white shadow-lg">
-        <p className="text-sm font-semibold opacity-90">Available Today</p>
-        <p className="mt-3 text-5xl font-bold">৳{availableBalance.toFixed(2)}</p>
-        <p className="mt-4 text-sm opacity-90">
-          Today's Spent: <span className="font-semibold">৳{todaySpending.toFixed(2)}</span>
-        </p>
+      {/* Available Balance Cards */}
+      <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Available Today */}
+        <div className="rounded-3xl bg-gradient-to-br from-teal-500 to-teal-600 p-8 text-white shadow-lg">
+          <p className="text-sm font-semibold opacity-90">Available Today</p>
+          <p className="mt-3 text-5xl font-bold">৳{availableToday.toFixed(2)}</p>
+          <p className="mt-4 text-sm opacity-90">
+            Today's Spent: <span className="font-semibold">৳{todaySpending.toFixed(2)}</span>
+          </p>
+        </div>
+
+        {/* Available for Month */}
+        <div className="rounded-3xl bg-gradient-to-br from-indigo-500 to-indigo-600 p-8 text-white shadow-lg">
+          <p className="text-sm font-semibold opacity-90">Available for Month</p>
+          <p className="mt-3 text-5xl font-bold">৳{availableMonth.toFixed(2)}</p>
+          <p className="mt-4 text-sm opacity-90">
+            Monthly Budget: <span className="font-semibold">৳{(dailyBudget * 30).toFixed(2)}</span>
+          </p>
+        </div>
       </div>
 
       {/* Add Spending Section */}
@@ -346,8 +466,8 @@ function FinancePage() {
         </button>
       </div>
 
-      {/* Spending History */}
-      <div className="rounded-2xl bg-white/95 p-8 shadow-lg ring-1 ring-slate-200">
+      {/* Today's Spending History */}
+      <div className="mb-8 rounded-2xl bg-white/95 p-8 shadow-lg ring-1 ring-slate-200">
         <h2 className="text-xl font-semibold text-slate-900 mb-6">
           Today's Spending History
         </h2>
@@ -376,11 +496,89 @@ function FinancePage() {
                   )}
                 </div>
                 <button
-                  onClick={() => handleDeleteSpending(spending)}
+                  onClick={() => handleDeleteClick(spending)}
                   className="ml-4 text-slate-400 hover:text-red-600 transition-colors"
                 >
                   ✕
                 </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Monthly Spending Overview */}
+      <div className="rounded-2xl bg-white/95 p-8 shadow-lg ring-1 ring-slate-200">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📊</span>
+            <h2 className="text-xl font-semibold text-slate-900">
+              Monthly Spending
+            </h2>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-slate-500">{currentMonthName}</p>
+            <p className="text-lg font-bold text-teal-600">৳{monthTotal.toFixed(2)}</p>
+          </div>
+        </div>
+
+        {sortedDates.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-5xl mb-4">📈</div>
+            <p className="text-slate-600 text-lg">No spending this month</p>
+            <p className="text-slate-500 text-sm mt-2">
+              Start tracking your expenses to see monthly data
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {sortedDates.map((date) => (
+              <div key={date} className="border border-slate-200 rounded-xl overflow-hidden">
+                {/* Date Header */}
+                <div className="flex items-center justify-between bg-slate-50 px-4 py-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📅</span>
+                    <span className="font-semibold text-slate-900">
+                      {formatDisplayDate(date)}
+                    </span>
+                    {date === todayDate && (
+                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-medium">
+                        Today
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-bold text-slate-900">
+                    ৳{groupedByDate[date].total.toFixed(2)}
+                  </span>
+                </div>
+                
+                {/* Spending Items */}
+                <div className="divide-y divide-slate-100">
+                  {groupedByDate[date].items.map((spending, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <span className="font-medium text-slate-800">
+                          ৳{spending.amount.toFixed(2)}
+                        </span>
+                        {spending.note && (
+                          <span className="ml-3 text-sm text-slate-500">
+                            {spending.note}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteClick(spending)}
+                        className="ml-4 p-1 text-slate-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50"
+                        title="Delete spending"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>

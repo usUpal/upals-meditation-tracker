@@ -802,8 +802,14 @@ function MeditationApp() {
   const [authExpiry, setAuthExpiry] = useState(null);
   const authTimeoutRef = useRef(null);
 
-  // Sidebar and navigation state
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Sidebar and navigation state - default closed on mobile, open on desktop
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    // Check if window exists (for SSR) and if it's desktop (>= 1024px)
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024;
+    }
+    return false; // Default to closed if window is not available
+  });
   const [currentPage, setCurrentPage] = useState("meditation");
 
   const [isLoadingData, setIsLoadingData] = useState(false);
